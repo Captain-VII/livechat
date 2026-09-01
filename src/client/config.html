@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Le mur — Serveur</title>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 28px;
+    background: #1b1917;
+    color: #e8e2d6;
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  h1 {
+    margin: 0 0 6px;
+    font-size: 1.1rem;
+  }
+
+  p {
+    margin: 0 0 18px;
+    color: #a2937f;
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+
+  label {
+    display: block;
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+    color: #cfc7b5;
+  }
+
+  input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    background: #2a231d;
+    border: 1px solid #4a4038;
+    border-radius: 6px;
+    color: #f0ead9;
+    font-family: ui-monospace, monospace;
+  }
+
+  input:focus {
+    outline: 2px solid #e4572e;
+    outline-offset: 1px;
+  }
+
+  .actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  button {
+    padding: 9px 18px;
+    border-radius: 6px;
+    border: none;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+
+  #valider {
+    background: #e4572e;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  #erreur {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: #f28b6e;
+    min-height: 1.2em;
+  }
+
+  #etat {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: #7fbf7f;
+    min-height: 1.2em;
+  }
+</style>
+</head>
+<body>
+  <h1>Adresse du serveur</h1>
+  <p>
+    Colle l'adresse que t'a donnée l'hôte de la soirée. Elle commence par
+    <code>ws://</code> ou <code>wss://</code>.
+  </p>
+
+  <label for="url">Adresse</label>
+  <input id="url" type="text" placeholder="wss://exemple.trycloudflare.com" autofocus>
+
+  <div id="erreur"></div>
+  <div id="etat"></div>
+
+  <div class="actions">
+    <button id="valider">Se connecter</button>
+  </div>
+
+  <script>
+    const champ = document.getElementById('url');
+    const erreur = document.getElementById('erreur');
+    const etat = document.getElementById('etat');
+
+    window.config.lire().then(({ serverUrl }) => {
+      if (serverUrl) champ.value = serverUrl;
+    });
+
+    async function valider() {
+      erreur.textContent = '';
+      etat.textContent = '';
+      const resultat = await window.config.sauver(champ.value);
+      if (resultat.ok) {
+        etat.textContent = 'Connexion en cours...';
+      } else {
+        erreur.textContent = resultat.erreur;
+      }
+    }
+
+    document.getElementById('valider').addEventListener('click', valider);
+    champ.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') valider();
+    });
+  </script>
+</body>
+</html>

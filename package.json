@@ -1,19 +1,47 @@
 {
   "name": "le-mur",
   "version": "1.0.0",
-  "description": "Un overlay de memes en direct, alimente depuis Discord.",
+  "description": "Un overlay de memes en direct, alimente depuis Discord, partageable entre plusieurs ecrans.",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "deploy": "node src/deploy-commands.js"
+    "server": "node src/server.js",
+    "deploy": "node src/deploy-commands.js",
+    "dist": "electron-builder --win portable"
   },
   "dependencies": {
     "discord.js": "^14.16.3",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
-    "electron": "^44.1.0"
+    "electron": "^44.1.0",
+    "electron-builder": "^26.15.3"
   },
-  "main": "src/main.js"
+  "main": "src/client/main.js",
+  "build": {
+    "appId": "fr.le-mur.overlay",
+    "productName": "Le mur",
+    "files": [
+      "src/client/**/*",
+      "package.json",
+      "!src/server.js",
+      "!src/deploy-commands.js",
+      "!node_modules/discord.js/**/*",
+      "!node_modules/@discordjs/**/*",
+      "!node_modules/discord-api-types/**/*",
+      "!node_modules/undici/**/*",
+      "!node_modules/ws/**/*"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "le-mur-${version}.exe"
+    },
+    "directories": {
+      "output": "dist"
+    }
+  }
 }
