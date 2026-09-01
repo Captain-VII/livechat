@@ -142,7 +142,9 @@ C'est tout. Au prochain `npm run server`, le déroulé est :
 
 Cette adresse **change à chaque lancement** du serveur — c'est le principe d'un
 tunnel gratuit sans compte. Le message est donc reposté à chaque démarrage,
-sans que tu aies rien à copier-coller toi-même.
+sans que tu aies rien à copier-coller toi-même — et l'annonce précédente est
+supprimée au passage, pour que le salon ne garde jamais qu'une seule adresse
+valide à la fois.
 
 ### Réglages (`.env`, section serveur)
 

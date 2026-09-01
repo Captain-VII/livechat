@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
@@ -45,6 +46,27 @@ const MODE_TUNNEL = (process.env.AUTO_TUNNEL ?? 'cloudflare').trim().toLowerCase
 // Salon ou l'adresse du tunnel est annoncee. Par defaut, le meme que celui
 // qui recoit les memes.
 const SALON_ANNONCE = (process.env.ANNOUNCE_CHANNEL ?? '').trim() || WALL_CHANNEL;
+
+// Garde le trace du dernier message d'annonce par salon, pour l'effacer avant
+// d'en poster un nouveau : sinon chaque redemarrage laisse une adresse morte
+// derriere lui dans Discord.
+const ETAT_ANNONCES_PATH = path.join(process.cwd(), '.mur-annonces.json');
+
+function lireDernieresAnnonces() {
+  try {
+    return JSON.parse(fs.readFileSync(ETAT_ANNONCES_PATH, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function ecrireDernieresAnnonces(etat) {
+  try {
+    fs.writeFileSync(ETAT_ANNONCES_PATH, JSON.stringify(etat, null, 2));
+  } catch (erreur) {
+    console.warn("[tunnel] Impossible de sauvegarder l'etat des annonces :", erreur.message);
+  }
+}
 
 const VIDEO_EXTENSIONS = ['.mp4', '.webm'];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp'];
@@ -294,18 +316,34 @@ async function annoncerSiPret() {
     return;
   }
 
+  const etat = lireDernieresAnnonces();
+
   for (const salon of salons.values()) {
+    // Efface l'annonce precedente de ce salon avant d'en poster une nouvelle.
+    const ancienId = etat[salon.id];
+    if (ancienId) {
+      try {
+        const ancien = await salon.messages.fetch(ancienId);
+        await ancien.delete();
+      } catch {
+        // Deja supprimee (par un humain, ou une purge Discord) : tant pis.
+      }
+    }
+
     try {
-      await salon.send(
+      const message = await salon.send(
         "**Le mur est en ligne.** Colle cette adresse dans l'appli " +
           "(icone de la barre des taches > *Configurer le serveur*) :\n" +
           `\`\`\`\n${urlPublique}\n\`\`\``,
       );
+      etat[salon.id] = message.id;
       console.log(`[tunnel] Adresse annoncee dans #${salon.name} (${salon.guild.name}).`);
     } catch (erreur) {
       console.error(`[tunnel] Envoi impossible dans #${salon.name} :`, erreur.message);
     }
   }
+
+  ecrireDernieresAnnonces(etat);
 }
 
 // --------------------------------------------------------------------------
