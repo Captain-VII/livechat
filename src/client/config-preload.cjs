@@ -5,4 +5,5 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('config', {
   lire: () => ipcRenderer.invoke('config:lire'),
   sauver: (url) => ipcRenderer.invoke('config:sauver', url),
+  surStatut: (callback) => ipcRenderer.on('config:statut', (_evenement, statut) => callback(statut)),
 });

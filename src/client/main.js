@@ -2,6 +2,12 @@ import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+import { execFile } from 'node:child_process';
+
+import electronUpdater from 'electron-updater';
+
+const { autoUpdater } = electronUpdater;
 
 import {
   BrowserWindow,
@@ -37,6 +43,18 @@ const ECRAN_VOULU = (process.env.OVERLAY_DISPLAY ?? '').trim();
 // Sur quelle sortie audio le son part. Vide ou "defaut" : celle de Windows.
 const SORTIE_VOULUE = (process.env.OVERLAY_AUDIO_DEVICE ?? '').trim();
 
+// Bascule tout seul sur un autre ecran quand un jeu ou un film tourne en plein
+// ecran exclusif sur l'ecran choisi (sans ca, l'overlay ne pourrait pas s'y
+// dessiner de toute facon). 'off' desactive completement.
+const BASCULE_AUTO_ACTIVE = !/^(off|non|false)$/i.test(
+  (process.env.OVERLAY_AUTO_SWITCH ?? 'on').trim(),
+);
+
+// Verifie les mises a jour tout seul, en arriere-plan. 'off' desactive.
+const MAJ_AUTO_ACTIVE = !/^(off|non|false)$/i.test(
+  (process.env.OVERLAY_AUTO_UPDATE ?? 'on').trim(),
+);
+
 // Un carre de papier scotche, 32x32 : l'icone de la barre des taches, en dur,
 // pour ne pas trimballer un binaire dans le depot.
 const ICONE_PNG =
@@ -52,6 +70,9 @@ let fenetre = null;
 let fenetreConfig = null;
 let tray = null;
 let ecranChoisiId = null;
+let ecranPrefere = null; // l'ecran "chez soi", choisi au demarrage ou a la main
+let ecranBascule = false; // true si on est la-dessus a cause de la bascule auto
+let pauseBasculeAutoJusqua = 0;
 let sonCoupe = false;
 
 // --------------------------------------------------------------------------
@@ -105,6 +126,7 @@ function connecter() {
 
   console.log(`[mur] Connexion a ${url}...`);
   majMenu();
+  notifierConfig({ type: 'connexion' });
 
   try {
     socket = new WebSocket(url);
@@ -118,6 +140,7 @@ function connecter() {
     console.log('[mur] Connecte au serveur.');
     delaiReconnexion = DELAI_RECONNEXION_MIN_MS;
     majMenu();
+    notifierConfig({ type: 'ouvert' });
   });
 
   socket.addEventListener('message', (evenement) => {
@@ -135,6 +158,7 @@ function connecter() {
   socket.addEventListener('close', () => {
     console.warn(`[mur] Deconnecte du serveur. Nouvelle tentative dans ${delaiReconnexion} ms.`);
     majMenu();
+    notifierConfig({ type: 'ferme', prochaineTentativeMs: delaiReconnexion });
     clearTimeout(tentativeReconnexion);
     tentativeReconnexion = setTimeout(connecter, delaiReconnexion);
     delaiReconnexion = Math.min(delaiReconnexion * 2, DELAI_RECONNEXION_MAX_MS);
@@ -229,9 +253,19 @@ function ecranVoulu() {
 }
 
 /** Deplace l'overlay sur un ecran, tout de suite. */
-function placerSur(ecran) {
+function placerSur(ecran, { manuel = true } = {}) {
   if (!ecran) return;
   ecranChoisiId = ecran.id;
+
+  if (manuel) {
+    // Un choix explicite (menu, ou reglage au demarrage) devient le nouveau
+    // "chez soi" : c'est la qu'on revient une fois le plein ecran termine.
+    ecranPrefere = ecran;
+    ecranBascule = false;
+    // Empeche la bascule auto de revenir immediatement dessus si l'utilisateur
+    // vient justement de choisir a la main l'ecran qui est en plein ecran.
+    pauseBasculeAutoJusqua = Date.now() + 20000;
+  }
 
   if (fenetre && !fenetre.isDestroyed()) {
     // La fenetre est figee (transparent + resizable est instable sur Windows) :
@@ -249,11 +283,128 @@ function placerSur(ecran) {
 function surChangementEcrans() {
   const actuel = screen.getAllDisplays().find((e) => e.id === ecranChoisiId);
   if (actuel) {
-    placerSur(actuel); // ses bornes ont pu changer
+    placerSur(actuel, { manuel: false }); // ses bornes ont pu changer
     return;
   }
   console.warn("[mur] L'ecran choisi a disparu.");
+  ecranBascule = false;
   placerSur(ecranVoulu());
+}
+
+// --------------------------------------------------------------------------
+// Bascule automatique : un jeu ou un film en plein ecran exclusif empeche
+// n'importe quelle fenetre (donc l'overlay) de se dessiner par-dessus. Windows
+// expose justement une API pour le detecter (SHQueryUserNotificationState,
+// celle qui sert normalement a couper les notifications pendant un jeu) ; on
+// s'en sert pour deplacer les memes sur un autre ecran le temps que ca dure.
+// --------------------------------------------------------------------------
+
+const execFileAsync = promisify(execFile);
+
+// PowerShell fait l'appel Win32 : pas de module natif a compiler, juste un
+// petit script lance a intervalles reguliers.
+const SCRIPT_SONDE_PLEIN_ECRAN = `
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public class MurNative {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+  [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+  [DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int state);
+  [StructLayout(LayoutKind.Sequential)]
+  public struct RECT { public int Left, Top, Right, Bottom; }
+  [StructLayout(LayoutKind.Sequential)]
+  public struct MONITORINFO { public int cbSize; public RECT rcMonitor; public RECT rcWork; public uint dwFlags; }
+}
+'@
+$state = 0
+[MurNative]::SHQueryUserNotificationState([ref]$state) | Out-Null
+$hwnd = [MurNative]::GetForegroundWindow()
+$hmon = [MurNative]::MonitorFromWindow($hwnd, 2)
+$mi = New-Object MurNative+MONITORINFO
+$mi.cbSize = [System.Runtime.InteropServices.Marshal]::SizeOf([type][MurNative+MONITORINFO])
+[MurNative]::GetMonitorInfo($hmon, [ref]$mi) | Out-Null
+@{ state = $state; left = $mi.rcMonitor.Left; top = $mi.rcMonitor.Top; right = $mi.rcMonitor.Right; bottom = $mi.rcMonitor.Bottom } | ConvertTo-Json -Compress
+`.trim();
+
+// QUNS_RUNNING_D3D_FULL_SCREEN : la valeur specifique a "quelque chose occupe
+// l'ecran en exclusif", pas juste "une fenetre maximisee".
+const QUNS_RUNNING_D3D_FULL_SCREEN = 2;
+
+let basculeAutoActive = BASCULE_AUTO_ACTIVE;
+let comptePleinEcran = 0;
+let compteRetour = 0;
+// A 3s par sondage (voir plus bas), 2 confirmations = ~6s de plein ecran
+// continu avant de bouger : assez court pour reagir vite, assez long pour
+// ignorer un etat qui vacille (ex. changement de fenetre active).
+const SEUIL_CONFIRMATION_POLLS = 2;
+let avertiEchecSonde = false;
+
+function basculerBasculeAuto() {
+  basculeAutoActive = !basculeAutoActive;
+  console.log(`[mur] Bascule automatique d'ecran : ${basculeAutoActive ? 'activee' : 'desactivee'}.`);
+  majMenu();
+}
+
+async function verifierPleinEcran() {
+  if (!basculeAutoActive) return;
+
+  let info;
+  try {
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', SCRIPT_SONDE_PLEIN_ECRAN],
+      { timeout: 3000, windowsHide: true },
+    );
+    info = JSON.parse(stdout);
+  } catch (erreur) {
+    if (!avertiEchecSonde) {
+      avertiEchecSonde = true;
+      console.warn('[mur] Detection du plein ecran indisponible :', erreur.message);
+    }
+    return;
+  }
+
+  const largeur = info.right - info.left;
+  const hauteur = info.bottom - info.top;
+  const ecranActif = ecrans().find(
+    (e) => e.bounds.x === info.left && e.bounds.y === info.top && e.bounds.width === largeur && e.bounds.height === hauteur,
+  );
+
+  // Toujours compare a l'ecran PREFERE, jamais a l'ecran affiche actuellement :
+  // une fois bascule ailleurs, ecranChoisiId pointe deja sur l'autre ecran, et
+  // comparer a ca aurait declenche un retour au tour suivant, plein ecran ou pas.
+  const pleinEcranExclusif = info.state === QUNS_RUNNING_D3D_FULL_SCREEN;
+  const surEcranPrefere = ecranActif?.id === ecranPrefere?.id;
+  const enPause = Date.now() < pauseBasculeAutoJusqua;
+
+  // Un sondage isole ne suffit pas : l'etat peut vaciller (changement de
+  // fenetre active, etc.). On exige plusieurs sondages d'affilee dans le meme
+  // sens avant de bouger, dans les deux directions.
+  if (pleinEcranExclusif && surEcranPrefere) {
+    comptePleinEcran += 1;
+    compteRetour = 0;
+  } else {
+    compteRetour += 1;
+    comptePleinEcran = 0;
+  }
+
+  if (comptePleinEcran >= SEUIL_CONFIRMATION_POLLS && !ecranBascule && !enPause) {
+    const autre = ecrans().find((e) => e.id !== ecranPrefere?.id);
+    if (autre) {
+      console.log('[mur] Plein ecran detecte sur cet ecran : bascule automatique.');
+      ecranBascule = true;
+      placerSur(autre, { manuel: false });
+    }
+    return;
+  }
+
+  if (ecranBascule && compteRetour >= SEUIL_CONFIRMATION_POLLS) {
+    console.log("[mur] Plein ecran termine : retour sur l'ecran prefere.");
+    ecranBascule = false;
+    if (ecranPrefere) placerSur(ecranPrefere, { manuel: false });
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -336,6 +487,13 @@ ipcMain.handle('config:sauver', (_evenement, url) => {
   return { ok: true };
 });
 
+/** Tient la fenetre de reglage au courant de l'etat reel de la connexion. */
+function notifierConfig(statut) {
+  if (fenetreConfig && !fenetreConfig.isDestroyed()) {
+    fenetreConfig.webContents.send('config:statut', statut);
+  }
+}
+
 function ouvrirConfig() {
   if (fenetreConfig && !fenetreConfig.isDestroyed()) {
     fenetreConfig.focus();
@@ -404,10 +562,14 @@ function creerFenetre() {
   fenetre.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   fenetre.loadFile(path.join(__dirname, 'overlay.html'));
 
+  // Le choix de depart devient "chez soi", mais ce n'est pas un clic de
+  // l'utilisateur : pas de pause de la bascule automatique pour autant.
+  ecranPrefere = ecran;
+
   // A la creation, Windows rabote la fenetre a la zone de travail : elle perd la
   // hauteur de la barre des taches. On repose les bornes exactes par le meme
   // chemin que le changement d'ecran.
-  placerSur(ecran);
+  placerSur(ecran, { manuel: false });
 }
 
 // --------------------------------------------------------------------------
@@ -457,12 +619,28 @@ function majMenu() {
       },
       {
         label: 'Afficher sur',
-        submenu: ecrans().map((ecran, index) => ({
-          label: decrire(ecran, index),
-          type: 'radio',
-          checked: ecran.id === ecranChoisiId,
-          click: () => placerSur(ecran),
-        })),
+        submenu: [
+          ...ecrans().map((ecran, index) => ({
+            label: decrire(ecran, index) + (ecranBascule && ecran.id === ecranChoisiId ? ' (bascule auto)' : ''),
+            type: 'radio',
+            checked: ecran.id === ecranChoisiId,
+            click: () => placerSur(ecran),
+          })),
+          { type: 'separator' },
+          {
+            label: 'Basculer seul si plein ecran ailleurs',
+            type: 'checkbox',
+            checked: basculeAutoActive,
+            click: basculerBasculeAuto,
+          },
+        ],
+      },
+      {
+        label: 'Demarrer avec Windows',
+        type: 'checkbox',
+        checked: demarreAvecWindows(),
+        enabled: app.isPackaged,
+        click: basculerDemarrageAvecWindows,
       },
       { type: 'separator' },
       { label: 'Quitter', click: () => app.quit() },
@@ -475,6 +653,58 @@ function creerTray() {
   tray.setToolTip('Le mur');
   majMenu();
   tray.on('click', () => tray.popUpContextMenu());
+}
+
+// --------------------------------------------------------------------------
+// Demarrer avec Windows : app.setLoginItemSettings gere lui-meme la cle de
+// registre "Run", sans dependance supplementaire. Ne marche que sur une
+// version installee (chemin stable) — en developpement, process.execPath
+// pointe sur electron.exe et l'option n'a pas de sens.
+// --------------------------------------------------------------------------
+
+function demarreAvecWindows() {
+  return app.isPackaged && app.getLoginItemSettings().openAtLogin;
+}
+
+function basculerDemarrageAvecWindows() {
+  if (!app.isPackaged) return;
+  const actuel = demarreAvecWindows();
+  app.setLoginItemSettings({ openAtLogin: !actuel });
+  console.log(`[mur] Demarrage avec Windows : ${!actuel ? 'active' : 'desactive'}.`);
+  majMenu();
+}
+
+// --------------------------------------------------------------------------
+// Mise a jour automatique : verifie la derniere release GitHub, telecharge en
+// silence, et s'installe au prochain redemarrage de l'appli. Rien a faire cote
+// utilisateur. N'a de sens que sur une version installee (electron-updater
+// s'appuie sur des fichiers ecrits a cote de l'appli par l'installeur).
+// --------------------------------------------------------------------------
+
+function demarrerVerificationMaj() {
+  if (!MAJ_AUTO_ACTIVE || !app.isPackaged) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = false;
+
+  autoUpdater.on('update-available', (info) => {
+    console.log(`[maj] Mise a jour ${info.version} disponible, telechargement...`);
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log(`[maj] Mise a jour ${info.version} prete. Installation et redemarrage.`);
+    autoUpdater.quitAndInstall();
+  });
+  autoUpdater.on('error', (erreur) => {
+    console.warn('[maj] Verification impossible :', erreur.message);
+  });
+
+  const verifier = () => autoUpdater.checkForUpdates().catch(() => {});
+
+  // Un delai au demarrage pour ne pas concurrencer la connexion initiale,
+  // puis un controle toutes les 6h — utile si l'appli reste ouverte plusieurs
+  // jours (un PC dedie a l'overlay, par exemple).
+  setTimeout(verifier, 10000);
+  setInterval(verifier, 6 * 60 * 60 * 1000).unref();
 }
 
 // --------------------------------------------------------------------------
@@ -502,6 +732,10 @@ if (!app.requestSingleInstanceLock()) {
     screen.on('display-added', surChangementEcrans);
     screen.on('display-removed', surChangementEcrans);
     screen.on('display-metrics-changed', surChangementEcrans);
+
+    if (ecrans().length > 1) setInterval(verifierPleinEcran, 3000).unref();
+
+    demarrerVerificationMaj();
 
     console.log('[mur] Ecrans detectes (numero a mettre dans OVERLAY_DISPLAY) :');
     ecrans().forEach((ecran, index) => {

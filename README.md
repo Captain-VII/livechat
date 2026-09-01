@@ -184,39 +184,55 @@ général pas un problème.
 
 ## 5. Construire et distribuer le client
 
-Pour ne pas demander à tes potes d'installer Node : construis un exécutable
-portable, à double-cliquer.
-
 ```bash
 npm run dist
 ```
 
-Produit `dist/le-mur-<version>.exe`, environ 90 Mo (c'est le runtime Electron,
-incompressible — rien à voir avec la taille du projet). Aucune installation
-requise côté receveur : double-clic, et c'est parti.
+Produit un petit installeur dans `dist/` :
+
+- `le-mur-Setup-<version>.exe` — l'installeur, ~110 Mo (le runtime Electron,
+  incompressible). Double-clic, installation silencieuse en quelques secondes
+  dans `%LOCALAPPDATA%\Programs\le-mur\` (pas besoin d'être admin), l'appli se
+  lance toute seule à la fin.
+- `latest.yml` et `le-mur-Setup-<version>.exe.blockmap` — les fichiers dont la
+  **mise à jour automatique** a besoin pour savoir qu'une nouvelle version
+  existe. Sans eux, l'app continue de tourner mais ne se met jamais à jour.
+
+Ce n'est plus un `.exe` portable : le passage à un vrai (petit) installeur est
+ce qui rend possibles la mise à jour automatique et le démarrage avec Windows
+— un portable s'auto-extrait dans un dossier temporaire différent à chaque
+lancement, un chemin qui change tout le temps ne peut servir de point d'ancrage
+à rien de durable.
 
 ### Distribution par GitHub Releases
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
-Puis sur la page GitHub du dépôt : **Releases > Draft a new release**, choisis
-le tag, glisse `dist/le-mur-<version>.exe` dans les fichiers joints, publie.
-Tes potes le téléchargent depuis cette page.
+Sur la page GitHub du dépôt : **Releases > Draft a new release**, choisis le
+tag, glisse **les trois fichiers** de `dist/` (le Setup, le `.yml`, le
+`.blockmap`) dans les fichiers joints, publie. `package.json` pointe déjà vers
+ce dépôt (`build.publish`), donc electron-updater sait où chercher sans rien
+configurer de plus.
 
-*(Ce dépôt n'a pas encore de remote configuré. `git remote add origin <url>`
-puis `git push -u origin main` la première fois — crée le dépôt sur GitHub
-d'abord si ce n'est pas déjà fait.)*
+**Si tes potes ont déjà l'ancien `.exe` portable (v1.0.0)** : il n'a pas la
+mise à jour automatique intégrée, elle ne peut pas se déclencher toute seule
+pour eux. Ils doivent retélécharger et relancer une fois l'installeur
+manuellement ; à partir de là, les mises à jour suivantes seront automatiques.
 
-### Ce que voit un ami qui lance le `.exe`
+### Ce que voit un ami qui lance l'installeur
 
 Rien à configurer à l'avance. Au premier lancement, une fenêtre demande
 l'adresse du serveur — celle que tu leur as donnée dans Discord, en `wss://`.
-Une fois validée, elle est mémorisée : les lancements suivants s'y connectent
-tout seuls. L'icône dans la barre des tâches permet de changer d'adresse, de
-choisir l'écran et la sortie audio, de couper le son.
+Elle dit clairement si la connexion a réussi (et se ferme toute seule) ou si
+ça bloque après plusieurs tentatives. Une fois validée, l'adresse est
+mémorisée : les lancements suivants s'y connectent tout seuls.
+
+L'icône dans la barre des tâches permet de changer d'adresse, de choisir
+l'écran et la sortie audio, de couper le son, de passer un meme, d'activer le
+démarrage avec Windows.
 
 **Pour quitter, c'est par cette icône.** Il n'y a pas de fenêtre à fermer,
 l'overlay est traversé par les clics — c'est le principe même d'un overlay.
@@ -300,7 +316,29 @@ console liste les écrans détectés :
 
 `OVERLAY_DISPLAY` accepte `principal` (ou vide), un numéro, ou un bout du nom —
 insensible à la casse et plus sûr qu'un numéro, qui change si Windows réordonne
-les écrans. Le sous-menu **Afficher sur** de l'icône bascule à chaud.
+les écrans. Le sous-menu **Afficher sur** de l'icône bascule à chaud, et ce
+choix devient le nouvel écran « préféré ».
+
+### Bascule automatique si tu es en plein écran ailleurs
+
+Un jeu ou un film en **plein écran exclusif** empêche n'importe quelle fenêtre
+(donc l'overlay) de se dessiner par-dessus — c'est une limite de Windows, déjà
+documentée plus bas. Plutôt que de rater tous les memes pendant ce temps-là,
+le client détecte ce cas et bascule tout seul sur l'autre écran, le temps que
+ça dure.
+
+Ça s'appuie sur `SHQueryUserNotificationState`, l'API Windows qui sert
+normalement à couper les notifications pendant un jeu — un petit script
+PowerShell interrogé toutes les 3 secondes, aucun module natif à compiler. La
+détection exige plusieurs sondages d'affilée dans le même sens (~6 s) avant de
+bouger, pour ignorer un état qui vacille, et un choix fait à la main dans le
+sous-menu **Afficher sur** est respecté pendant 20 s avant que la bascule
+automatique ne puisse le reprendre.
+
+`OVERLAY_AUTO_SWITCH=off` désactive complètement le mécanisme ; la case
+**Basculer seul si plein écran ailleurs** dans le sous-menu **Afficher sur**
+fait pareil, en cours de soirée. N'a d'effet qu'avec au moins deux écrans
+branchés — sans second écran, il n'y a nulle part où basculer.
 
 ## Choisir la sortie audio (par client)
 
@@ -311,6 +349,27 @@ micro. Le sous-menu **Sortie audio** de l'icône bascule à chaud, même pendant
 qu'une vidéo joue. L'application demande la permission « média » à Chromium au
 démarrage — c'est ce qui débloque le nom des périphériques ; elle n'ouvre jamais
 le micro.
+
+## Mise à jour automatique
+
+Une fois installée (pas en portable — voir plus haut), l'appli vérifie la
+dernière version publiée sur GitHub Releases 10 s après le démarrage, puis
+toutes les 6 h si elle reste ouverte plusieurs jours. Si une nouvelle version
+est trouvée, elle se télécharge en silence et s'installe au redémarrage
+suivant de l'appli, sans rien demander.
+
+`OVERLAY_AUTO_UPDATE=off` désactive la vérification. Ça ne concerne que le
+client — le serveur (`src/server.js`) n'a pas de mécanisme de mise à jour, tu
+le mets à jour toi-même avec `git pull`.
+
+## Démarrer avec Windows
+
+L'icône propose une case **Démarrer avec Windows**, qui ajoute (ou retire)
+l'appli du démarrage automatique de la session — via
+`app.setLoginItemSettings`, la même mécanique que n'importe quelle appli
+Windows légitime, sans dépendance de plus. Disponible uniquement sur une
+version installée : en développement, il n'y a pas de chemin stable vers quoi
+pointer.
 
 ## Configuration
 
@@ -336,8 +395,10 @@ le micro.
 | `OVERLAY_DISPLAY` | `principal` | Écran d'affichage : `principal`, un numéro, ou un bout du nom. |
 | `OVERLAY_VOLUME` | `0.7` | Volume des vidéos, de 0 à 1. |
 | `OVERLAY_AUDIO_DEVICE` | `defaut` | Sortie audio : `defaut`, ou un bout du nom du périphérique. |
+| `OVERLAY_AUTO_SWITCH` | `on` | Bascule sur l'autre écran en cas de plein écran exclusif. `off` pour désactiver. |
+| `OVERLAY_AUTO_UPDATE` | `on` | Vérifie les mises à jour tout seul (version installée uniquement). `off` pour désactiver. |
 
-Un ami qui lance le `.exe` sans `.env` n'a besoin de rien de tout ça : la
+Un ami qui lance l'installeur sans `.env` n'a besoin de rien de tout ça : la
 fenêtre au premier lancement et les sous-menus de l'icône suffisent.
 
 ## Structure
@@ -389,3 +450,19 @@ Discord réponde. Monte `EMBED_WAIT_MS` côté serveur si la connexion traîne.
 
 **Aucun son du tout** — vérifie « Sortie audio » dans le menu de l'icône, et que
 « Couper le son » n'est pas actif.
+
+**Les memes n'apparaissent jamais alors que je suis en plein écran** — c'est
+peut-être un plein écran *exclusif* (voir plus haut) : normalement la bascule
+automatique t'envoie sur l'autre écran, mais il en faut un second de branché,
+et `OVERLAY_AUTO_SWITCH` ne doit pas être sur `off`. Sans second écran, il n'y
+a nulle part où basculer — reste en plein écran fenêtré pour ce jeu-là.
+
+**L'appli ne se met jamais à jour** — la mise à jour automatique ne marche que
+sur une version installée (l'ancien `.exe` portable n'a pas ce mécanisme,
+voir « Distribution par GitHub Releases » plus haut). Vérifie aussi que la
+dernière release GitHub contient bien les trois fichiers (`Setup.exe`,
+`.yml`, `.blockmap`), et que `OVERLAY_AUTO_UPDATE` n'est pas sur `off`.
+
+**« Démarrer avec Windows » est grisée** — cette option n'a de sens que sur
+une version installée ; en développement (`npm start`), il n'y a pas de
+chemin stable vers quoi pointer.

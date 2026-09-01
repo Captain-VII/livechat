@@ -8,11 +8,12 @@
     "start": "electron .",
     "server": "node src/server.js",
     "deploy": "node src/deploy-commands.js",
-    "dist": "electron-builder --win portable"
+    "dist": "electron-builder --win"
   },
   "dependencies": {
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5",
+    "electron-updater": "^6.8.9",
     "ws": "^8.21.3"
   },
   "devDependencies": {
@@ -35,13 +36,24 @@
       "!node_modules/ws/**/*"
     ],
     "win": {
-      "target": "portable"
-    },
-    "portable": {
-      "artifactName": "le-mur-${version}.exe"
+      "target": "nsis"
     },
     "directories": {
       "output": "dist"
-    }
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "artifactName": "le-mur-Setup-${version}.exe",
+      "deleteAppDataOnUninstall": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Captain-VII",
+        "repo": "le-mur"
+      }
+    ]
   }
 }

@@ -81,9 +81,12 @@
   #etat {
     margin-top: 10px;
     font-size: 0.8rem;
-    color: #7fbf7f;
     min-height: 1.2em;
   }
+
+  #etat.attente { color: #cfae5a; }
+  #etat.ok { color: #7fbf7f; font-weight: 600; }
+  #etat.avertissement { color: #f2c14e; }
 </style>
 </head>
 <body>
@@ -107,20 +110,65 @@
     const champ = document.getElementById('url');
     const erreur = document.getElementById('erreur');
     const etat = document.getElementById('etat');
+    const bouton = document.getElementById('valider');
 
     window.config.lire().then(({ serverUrl }) => {
       if (serverUrl) champ.value = serverUrl;
     });
 
+    const SEUIL_AVERTISSEMENT = 3;
+    let echecsConsecutifs = 0;
+    let minuteurAvertissement = null;
+
+    function afficherEtat(texte, classe) {
+      etat.textContent = texte;
+      etat.className = classe ?? '';
+    }
+
+    // Le vrai statut vient du processus principal : c'est lui qui sait si le
+    // websocket est vraiment ouvert, pas juste si l'adresse a ete acceptee.
+    window.config.surStatut((statut) => {
+      clearTimeout(minuteurAvertissement);
+
+      if (statut.type === 'connexion') {
+        // Ne remet PAS le compteur d'echecs a zero : cet evenement se
+        // reproduit a chaque tentative de reconnexion, donc l'utiliser pour
+        // reinitialiser empecherait jamais le seuil d'etre atteint.
+        if (echecsConsecutifs < SEUIL_AVERTISSEMENT) afficherEtat('Connexion en cours...', 'attente');
+        return;
+      }
+
+      if (statut.type === 'ouvert') {
+        echecsConsecutifs = 0;
+        afficherEtat('Connecte ! Cette fenetre se ferme...', 'ok');
+        setTimeout(() => window.close(), 1200);
+        return;
+      }
+
+      if (statut.type === 'ferme') {
+        echecsConsecutifs += 1;
+        // Une coupure isolee ne veut rien dire de precis ; au bout de
+        // plusieurs echecs d'affilee, ca sent l'adresse fausse ou le serveur
+        // injoignable — on le dit, sans arreter les tentatives pour autant.
+        if (echecsConsecutifs >= SEUIL_AVERTISSEMENT) {
+          afficherEtat(
+            "Toujours pas connecte. Verifie l'adresse et que le serveur tourne.",
+            'avertissement',
+          );
+        } else {
+          afficherEtat('Connexion en cours...', 'attente');
+        }
+      }
+    });
+
     async function valider() {
       erreur.textContent = '';
-      etat.textContent = '';
+      afficherEtat('', '');
+      bouton.disabled = true;
       const resultat = await window.config.sauver(champ.value);
-      if (resultat.ok) {
-        etat.textContent = 'Connexion en cours...';
-      } else {
-        erreur.textContent = resultat.erreur;
-      }
+      bouton.disabled = false;
+      if (!resultat.ok) erreur.textContent = resultat.erreur;
+      // Si resultat.ok, la suite arrive par window.config.surStatut().
     }
 
     document.getElementById('valider').addEventListener('click', valider);
