@@ -1,6 +1,6 @@
 {
   "name": "le-mur",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Un overlay de memes en direct, alimente depuis Discord, partageable entre plusieurs ecrans.",
   "type": "module",
   "private": true,
@@ -36,7 +36,8 @@
       "!node_modules/ws/**/*"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "directories": {
       "output": "dist"

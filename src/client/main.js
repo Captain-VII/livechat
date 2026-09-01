@@ -12,6 +12,7 @@ const { autoUpdater } = electronUpdater;
 import {
   BrowserWindow,
   Menu,
+  Notification,
   Tray,
   app,
   globalShortcut,
@@ -177,6 +178,33 @@ function estConnecte() {
 function demanderPasser() {
   if (!estConnecte()) return;
   socket.send(JSON.stringify({ type: 'passer' }));
+}
+
+// Un simple carre orange, genere sur place : verifie l'affichage (ecran, taille,
+// son) sans avoir besoin d'attendre un vrai meme depuis Discord.
+const IMAGE_TEST =
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400">' +
+      '<rect width="100%" height="100%" fill="#e4572e"/>' +
+      '<text x="50%" y="50%" font-size="48" fill="#fff" font-family="sans-serif" ' +
+      'text-anchor="middle" dominant-baseline="middle">Test</text></svg>',
+  );
+
+let idTest = -1;
+
+/** Affiche un faux meme localement, sans passer par le serveur ni Discord. */
+function testerMeme() {
+  afficher({
+    id: idTest--,
+    rotation: Math.round((Math.random() * 4 - 2) * 100) / 100,
+    duree: 8000,
+    author: { name: 'Toi (test)', avatar: '' },
+    text: null,
+    mediaUrl: IMAGE_TEST,
+    mediaType: 'image',
+  });
+  setTimeout(cacher, 8000);
 }
 
 /** Change de serveur a chaud : ferme la connexion actuelle, la nouvelle prend le relai. */
@@ -591,6 +619,7 @@ function majMenu() {
         click: demanderPasser,
         enabled: estConnecte(),
       },
+      { label: 'Tester un meme', click: testerMeme },
       { type: 'separator' },
       { label: 'Configurer le serveur...', click: ouvrirConfig },
       { label: sonCoupe ? 'Retablir le son' : 'Couper le son', click: basculerSon },
@@ -691,8 +720,19 @@ function demarrerVerificationMaj() {
     console.log(`[maj] Mise a jour ${info.version} disponible, telechargement...`);
   });
   autoUpdater.on('update-downloaded', (info) => {
-    console.log(`[maj] Mise a jour ${info.version} prete. Installation et redemarrage.`);
-    autoUpdater.quitAndInstall();
+    console.log(`[maj] Mise a jour ${info.version} prete. Redemarrage dans 15 s.`);
+
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'Le mur',
+        body: `Mise a jour ${info.version} installee. Redemarrage dans 15 secondes...`,
+        silent: true,
+      }).show();
+    }
+
+    // Un delai plutot qu'un redemarrage immediat : le temps que la
+    // notification s'affiche, et de ne pas couper un meme en plein milieu.
+    setTimeout(() => autoUpdater.quitAndInstall(), 15000);
   });
   autoUpdater.on('error', (erreur) => {
     console.warn('[maj] Verification impossible :', erreur.message);
