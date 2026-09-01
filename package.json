@@ -1,6 +1,6 @@
 {
   "name": "le-mur",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Un overlay de memes en direct, alimente depuis Discord, partageable entre plusieurs ecrans.",
   "type": "module",
   "private": true,
