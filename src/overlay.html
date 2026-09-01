@@ -158,6 +158,39 @@
   <script>
     const scene = document.getElementById('scene');
     let minuteur = null;
+    let sortieAudio = null;
+
+    // Seul un renderer sait enumerer les peripheriques audio. On passe la liste
+    // au processus principal, qui en fait un menu, et il nous renvoie le choix.
+    async function annoncerSorties() {
+      try {
+        const tous = await navigator.mediaDevices.enumerateDevices();
+        window.mur.annoncerSorties(
+          tous
+            .filter((d) => d.kind === 'audiooutput')
+            .map((d) => ({ deviceId: d.deviceId, label: d.label })),
+        );
+      } catch (erreur) {
+        console.error('[overlay] enumeration audio impossible :', erreur.name, erreur.message);
+      }
+    }
+
+    /** Route le son d'un element vers la sortie choisie. */
+    function router(media) {
+      if (!sortieAudio || typeof media.setSinkId !== 'function') return;
+      media.setSinkId(sortieAudio).catch((erreur) => {
+        console.error('[overlay] sortie audio refusee :', erreur.name, erreur.message);
+      });
+    }
+
+    navigator.mediaDevices?.addEventListener('devicechange', annoncerSorties);
+    annoncerSorties();
+
+    window.mur.surSortieAudio((id) => {
+      sortieAudio = id;
+      // Le meme en cours suit tout de suite, sans attendre le suivant.
+      scene.querySelectorAll('video').forEach(router);
+    });
 
     // Un meme doit occuper l'ecran. On l'agrandit jusqu'a remplir la place
     // disponible, sans depasser 3x sa taille reelle : au-dela, une petite image
@@ -206,6 +239,7 @@
           video.addEventListener('loadedmetadata', () => {
             dimensionner(video, video.videoWidth, video.videoHeight);
           });
+          router(video);
           // autoplayPolicy est leve cote Electron ; si ca casse un jour, c'est ici
           // que ca se verra plutot que dans un silence inexplicable.
           video.play().catch((erreur) => {

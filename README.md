@@ -86,8 +86,9 @@ pendant qu'un meme est affiché.
 **Pour quitter, c'est par l'icône dans la barre des tâches.** Il n'y a pas de
 croix à cliquer, c'est le principe même d'un overlay.
 
-L'icône donne aussi : pause, passer le meme affiché, couper le son, et **choisir
-l'écran**. Deux raccourcis globaux font le reste sans lâcher la souris :
+L'icône donne aussi : pause, passer le meme affiché, couper le son, **choisir
+l'écran** et **choisir la sortie audio**. Deux raccourcis globaux font le reste
+sans lâcher la souris :
 
 - `Ctrl+Alt+M` — passe le meme affiché
 - `Ctrl+Alt+P` — met la file en pause (les memes continuent de s'accumuler)
@@ -102,8 +103,8 @@ Au démarrage, la console liste tes écrans numérotés :
 
 ```
 [mur] Ecrans detectes (numero a mettre dans OVERLAY_DISPLAY) :
-[mur]   1. MAG 274Q X24 — 2560x1440 (principal)  <-- les memes s'affichent ici
-[mur]   2. MAG 274QF X24 — 1440x2560
+[mur]   1. MAG 274Q X24 - 2560x1440 (principal)  <-- les memes s'affichent ici
+[mur]   2. MAG 274QF X24 - 1440x2560
 ```
 
 `OVERLAY_DISPLAY` accepte trois formes :
@@ -125,6 +126,38 @@ l'overlay tout de suite, sans redémarrer. Ce choix vaut pour la session ;
 
 Un écran débranché en cours de route ne casse rien : l'overlay revient sur le
 réglage de `.env`.
+
+## Choisir la sortie audio
+
+Par défaut le son part sur la sortie audio de Windows, mélangé au reste. Si tu as
+une carte son à plusieurs canaux — GoXLR, Voicemeeter, une interface — tu peux
+envoyer les memes sur un canal à part et les régler indépendamment du jeu, du
+micro et de la musique.
+
+Au démarrage, la console liste tes sorties :
+
+```
+[mur] Sorties audio (nom a mettre dans OVERLAY_AUDIO_DEVICE) :
+[mur]   Default - System (TC-HELICON GoXLR Mini)
+[mur]   System (TC-HELICON GoXLR Mini)
+[mur]   Chat (TC-HELICON GoXLR Mini)
+[mur]   Music (TC-HELICON GoXLR Mini)
+```
+
+`OVERLAY_AUDIO_DEVICE` prend un bout du nom, insensible à la casse :
+`OVERLAY_AUDIO_DEVICE=Music`. Vide ou `defaut` laisse Windows décider. Un nom qui
+ne correspond à rien est signalé dans la console, avec la liste, et on retombe
+sur la sortie par défaut.
+
+Le sous-menu **Sortie audio** de l'icône bascule à chaud, même pendant qu'une
+vidéo joue. Comme pour l'écran, ce choix vaut pour la session ; `.env` décide au
+lancement suivant. Si le périphérique est débranché en cours de route, le son
+revient sur la sortie par défaut.
+
+Un détail à savoir : l'application demande la permission « média » à Chromium au
+démarrage. C'est ce qui débloque le **nom** des périphériques — sans elle, ils
+apparaissent comme des identifiants illisibles. La page n'ouvre jamais le micro,
+elle se contente de lire la liste des sorties.
 
 ---
 
@@ -176,6 +209,7 @@ n'est rejouable. C'est le principe d'un overlay.
 | `OVERLAY_DURATION_MS` | `8000` | Temps d'affichage d'un meme. |
 | `OVERLAY_GAP_MS` | `500` | Respiration entre deux memes. |
 | `OVERLAY_VOLUME` | `0.7` | Volume des vidéos, de 0 à 1. |
+| `OVERLAY_AUDIO_DEVICE` | `defaut` | Sortie audio : `defaut`, ou un bout du nom du périphérique. |
 | `QUEUE_MAX` | `40` | Taille max de la file d'attente. |
 | `EMBED_WAIT_MS` | `6000` | Délai laissé à Discord pour résoudre le lien d'un GIF. |
 
@@ -231,3 +265,11 @@ le résout.
 
 **Un GIF s'affiche en texte** — le délai d'attente de l'embed a expiré avant que
 Discord réponde. Monte `EMBED_WAIT_MS` si ta connexion traîne.
+
+**Un GIF n'a pas de son** — c'est normal, et il n'y a rien à régler : un GIF est
+muet par définition, et les sélecteurs le servent sous forme de MP4 sans piste
+audio. Le son ne concerne que les vraies vidéos.
+
+**Aucun son du tout** — vérifie « Sortie audio » dans le menu de l'icône : le son
+part peut-être sur un canal que tu n'écoutes pas. Vérifie aussi `OVERLAY_VOLUME`
+et que « Couper le son » n'est pas actif.

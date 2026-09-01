@@ -8,8 +8,10 @@ import {
   Tray,
   app,
   globalShortcut,
+  ipcMain,
   nativeImage,
   screen,
+  session,
 } from 'electron';
 import {
   Client,
@@ -48,6 +50,10 @@ const ATTENTE_EMBED_MS = reglage('EMBED_WAIT_MS', 6000, { min: 500 });
 // Sinon un numero (celui affiche au demarrage et dans le menu) ou un bout du nom
 // de l'ecran, ce qui resiste au reordonnancement de Windows.
 const ECRAN_VOULU = (process.env.OVERLAY_DISPLAY ?? '').trim();
+
+// Sur quelle sortie audio le son part. Vide ou "defaut" : celle de Windows.
+// Sinon un bout du nom du peripherique, tel qu'affiche au demarrage.
+const SORTIE_VOULUE = (process.env.OVERLAY_AUDIO_DEVICE ?? '').trim();
 
 const VIDEO_EXTENSIONS = ['.mp4', '.webm'];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp'];
@@ -307,6 +313,70 @@ function surChangementEcrans() {
 }
 
 // --------------------------------------------------------------------------
+// Le choix de la sortie audio : envoyer les memes sur un canal a part, pour les
+// piloter separement du jeu ou du micro.
+// --------------------------------------------------------------------------
+
+/** @type {Array<{ deviceId: string, label: string }>} Annoncees par la fenetre. */
+let sortiesAudio = [];
+let sortieChoisieId = null;
+
+/** Les sorties presentables : Chromium ajoute un alias "communications" inutile ici. */
+function sortiesUtiles() {
+  return sortiesAudio.filter((s) => s.deviceId !== 'communications');
+}
+
+/** Resout OVERLAY_AUDIO_DEVICE dans la liste annoncee par la fenetre. */
+function sortieVoulue() {
+  if (!SORTIE_VOULUE || /^(defaut|default)$/i.test(SORTIE_VOULUE)) return null;
+
+  const trouvee = sortiesUtiles().find((s) =>
+    s.label?.toLowerCase().includes(SORTIE_VOULUE.toLowerCase()),
+  );
+  if (trouvee) return trouvee.deviceId;
+
+  console.warn(`[mur] OVERLAY_AUDIO_DEVICE="${SORTIE_VOULUE}" ne correspond a aucune sortie.`);
+  console.warn('[mur] On reste sur la sortie par defaut. Sorties disponibles :');
+  sortiesUtiles().forEach((s) => console.warn(`[mur]   ${s.label}`));
+  return null;
+}
+
+/** Envoie le son vers une sortie. null = celle de Windows. */
+function routerVers(deviceId) {
+  sortieChoisieId = deviceId;
+  if (fenetre && !fenetre.isDestroyed()) {
+    fenetre.webContents.send('sortie-audio', deviceId ?? 'default');
+  }
+  const nom = sortiesUtiles().find((s) => s.deviceId === deviceId)?.label;
+  console.log(`[mur] Son envoye sur : ${nom ?? 'la sortie par defaut de Windows'}.`);
+  majMenu();
+}
+
+/** La fenetre vient d'enumerer les peripheriques (au demarrage, ou apres un branchement). */
+function surSortiesAnnoncees(liste) {
+  const premiereFois = sortiesAudio.length === 0;
+  sortiesAudio = liste;
+
+  if (premiereFois) {
+    console.log('[mur] Sorties audio (nom a mettre dans OVERLAY_AUDIO_DEVICE) :');
+    sortiesUtiles().forEach((s) => console.log(`[mur]   ${s.label}`));
+  }
+
+  // La sortie choisie a pu disparaitre avec le peripherique.
+  const existeEncore = sortiesUtiles().some((s) => s.deviceId === sortieChoisieId);
+  if (sortieChoisieId && !existeEncore) {
+    console.warn('[mur] La sortie audio choisie a disparu. Retour a celle par defaut.');
+    routerVers(sortieVoulue());
+    return;
+  }
+
+  if (premiereFois) routerVers(sortieVoulue());
+  else majMenu();
+}
+
+ipcMain.on('sorties-audio', (_evenement, liste) => surSortiesAnnoncees(liste));
+
+// --------------------------------------------------------------------------
 // La fenetre : tout l'ecran choisi, transparente, traversee par les clics
 // --------------------------------------------------------------------------
 
@@ -374,6 +444,29 @@ function majMenu() {
       { label: enPause ? 'Reprendre' : 'Pause', click: basculerPause },
       { label: 'Passer ce meme', click: passer },
       { label: sonCoupe ? 'Retablir le son' : 'Couper le son', click: basculerSon },
+      {
+        label: 'Sortie audio',
+        submenu:
+          sortiesUtiles().length === 0
+            ? [{ label: 'Detection en cours...', enabled: false }]
+            : [
+                {
+                  label: 'Sortie par defaut de Windows',
+                  type: 'radio',
+                  checked: sortieChoisieId === null,
+                  click: () => routerVers(null),
+                },
+                { type: 'separator' },
+                ...sortiesUtiles()
+                  .filter((s) => s.deviceId !== 'default')
+                  .map((sortie) => ({
+                    label: sortie.label,
+                    type: 'radio',
+                    checked: sortie.deviceId === sortieChoisieId,
+                    click: () => routerVers(sortie.deviceId),
+                  })),
+              ],
+      },
       {
         label: 'Afficher sur',
         submenu: ecrans().map((ecran, index) => ({
@@ -572,6 +665,14 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.whenReady().then(() => {
+    // Chromium masque le nom des peripheriques audio tant que la permission
+    // media n'est pas accordee. On l'accorde a notre propre page : elle n'ouvre
+    // jamais le micro, elle se contente de lire la liste des sorties.
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, accorder) =>
+      accorder(permission === 'media'),
+    );
+    session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'media');
+
     creerFenetre();
     creerTray();
 
