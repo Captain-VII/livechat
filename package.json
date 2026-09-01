@@ -1,0 +1,20 @@
+{
+  "name": "le-mur",
+  "version": "1.0.0",
+  "description": "Un mur de memes en direct, alimente depuis Discord.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "socket.io": "^4.8.1"
+  }
+}
