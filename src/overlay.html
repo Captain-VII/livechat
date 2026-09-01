@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<!-- Le seul contenu distant autorise, ce sont les images et videos que le bot
+     envoie. Pas de script distant, pas d'eval. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src https: data:; media-src https: data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Le mur</title>
+<style>
+  :root {
+    --papier: #f3efe4;
+    --encre: #1b1917;
+    --scotch: rgba(226, 214, 176, 0.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    /* Le fond transparent, c'est ce qui laisse voir le bureau derriere. */
+    background: transparent;
+    /* Ceinture et bretelles : la fenetre est deja traversee par les clics. */
+    pointer-events: none;
+    user-select: none;
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  #scene {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .feuille {
+    --rot: 0deg;
+    max-width: 68vw;
+    padding: 18px 18px 14px;
+    background: var(--papier);
+    color: var(--encre);
+    transform: rotate(var(--rot));
+    /* Une ombre franche : la feuille doit se detacher de n'importe quel fond. */
+    box-shadow: 0 28px 60px rgba(0, 0, 0, .65), 0 4px 10px rgba(0, 0, 0, .5);
+    position: relative;
+  }
+
+  /* le bout de scotch */
+  .feuille::before {
+    content: "";
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    width: 156px;
+    height: 38px;
+    transform: translateX(-50%) rotate(-2.5deg);
+    background: var(--scotch);
+    border-left: 1px solid rgba(255, 255, 255, .35);
+    border-right: 1px solid rgba(255, 255, 255, .35);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  }
+
+  /* La taille reelle est calculee en JS : un meme doit remplir l'ecran, pas
+     rester a sa taille native. Ces bornes ne sont qu'un filet de securite. */
+  .feuille img,
+  .feuille video {
+    display: block;
+    max-width: 62vw;
+    max-height: 72vh;
+    width: auto;
+    height: auto;
+    background: #ddd7c8;
+  }
+
+  .legende {
+    margin: 14px 4px 4px;
+    max-width: 62vw;
+    font-size: 1.4rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  /* Un meme sans image : c'est le texte qui devient l'affiche. Largeur et
+     hauteur imposees, sinon une phrase courte se reduit a un bandeau. */
+  .feuille.texte {
+    width: 46vw;
+    max-width: 46vw;
+    min-height: 34vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .feuille.texte .legende {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 24px;
+    padding: 28px 0;
+    max-width: none;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.25;
+  }
+
+  .feuille.texte .signature {
+    margin-top: 0;
+  }
+
+  .signature {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(0, 0, 0, .18);
+    font-size: 1rem;
+    color: #5d564c;
+  }
+
+  .signature img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #cfc7b5;
+  }
+
+  .signature .pseudo {
+    font-weight: 700;
+    color: #3a352e;
+  }
+
+  /* La seule animation : le meme se colle a l'ecran. Il entre legerement trop
+     grand et se stabilise d'un coup sec. Rien d'autre ne bouge, et il s'efface
+     sans fondu quand son temps est ecoule. */
+  @keyframes coller {
+    from { transform: rotate(var(--rot)) scale(1.07); }
+    to   { transform: rotate(var(--rot)) scale(1); }
+  }
+
+  .feuille {
+    animation: coller 300ms cubic-bezier(.15, .85, .25, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .feuille { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <div id="scene"></div>
+
+  <script>
+    const scene = document.getElementById('scene');
+    let minuteur = null;
+
+    // Un meme doit occuper l'ecran. On l'agrandit jusqu'a remplir la place
+    // disponible, sans depasser 3x sa taille reelle : au-dela, une petite image
+    // devient une bouillie de pixels.
+    const PART_LARGEUR = 0.62;
+    const PART_HAUTEUR = 0.72;
+    const AGRANDISSEMENT_MAX = 3;
+
+    function dimensionner(element, largeur, hauteur) {
+      if (!largeur || !hauteur) return;
+      const echelle = Math.min(
+        (window.innerWidth * PART_LARGEUR) / largeur,
+        (window.innerHeight * PART_HAUTEUR) / hauteur,
+        AGRANDISSEMENT_MAX,
+      );
+      element.style.width = Math.round(largeur * echelle) + 'px';
+      element.style.height = 'auto';
+    }
+
+    function tailleTexte(longueur) {
+      if (longueur <= 24) return '6rem';
+      if (longueur <= 60) return '4.2rem';
+      if (longueur <= 140) return '2.8rem';
+      return '2rem';
+    }
+
+    function retirer() {
+      clearTimeout(minuteur);
+      minuteur = null;
+      scene.replaceChildren();
+    }
+
+    function feuille(meme) {
+      const el = document.createElement('article');
+      el.className = 'feuille' + (meme.mediaUrl ? '' : ' texte');
+      el.style.setProperty('--rot', (meme.rotation ?? 0) + 'deg');
+
+      if (meme.mediaUrl) {
+        if (meme.mediaType === 'video') {
+          const video = document.createElement('video');
+          video.src = meme.mediaUrl;
+          video.loop = true;
+          video.playsInline = true;
+          video.volume = meme.volume ?? 0;
+          video.muted = !meme.volume;
+          video.addEventListener('loadedmetadata', () => {
+            dimensionner(video, video.videoWidth, video.videoHeight);
+          });
+          // autoplayPolicy est leve cote Electron ; si ca casse un jour, c'est ici
+          // que ca se verra plutot que dans un silence inexplicable.
+          video.play().catch((erreur) => {
+            console.error('[overlay] lecture video refusee :', erreur.name, erreur.message);
+          });
+          el.appendChild(video);
+        } else {
+          const img = document.createElement('img');
+          img.src = meme.mediaUrl;
+          img.alt = meme.text || 'meme';
+          img.addEventListener('load', () => {
+            dimensionner(img, img.naturalWidth, img.naturalHeight);
+          });
+          // Lien mort : la feuille devient une affiche plutot qu'un cadre vide.
+          img.addEventListener('error', () => {
+            console.warn('[overlay] image introuvable :', meme.mediaUrl);
+            img.remove();
+            el.classList.add('texte');
+            const legende = el.querySelector('.legende');
+            if (legende) {
+              legende.style.fontSize = tailleTexte(legende.textContent.length);
+            } else {
+              const rate = document.createElement('p');
+              rate.className = 'legende';
+              rate.textContent = 'image introuvable';
+              rate.style.fontSize = tailleTexte(rate.textContent.length);
+              el.prepend(rate);
+            }
+          });
+          el.appendChild(img);
+        }
+      }
+
+      if (meme.text) {
+        const p = document.createElement('p');
+        p.className = 'legende';
+        p.textContent = meme.text;
+        // Sur une affiche sans image, le texte porte tout : plus il est court,
+        // plus il est gros.
+        if (!meme.mediaUrl) p.style.fontSize = tailleTexte(meme.text.length);
+        el.appendChild(p);
+      }
+
+      const signature = document.createElement('div');
+      signature.className = 'signature';
+      if (meme.author?.avatar) {
+        const avatar = document.createElement('img');
+        avatar.src = meme.author.avatar;
+        avatar.alt = '';
+        signature.appendChild(avatar);
+      }
+      const pseudo = document.createElement('span');
+      pseudo.className = 'pseudo';
+      pseudo.textContent = meme.author?.name ?? 'anonyme';
+      signature.appendChild(pseudo);
+      el.appendChild(signature);
+
+      return el;
+    }
+
+    // Un seul meme a l'ecran a la fois : le suivant remplace le precedent.
+    window.mur.surMeme((meme) => {
+      clearTimeout(minuteur);
+      scene.replaceChildren(feuille(meme));
+      minuteur = setTimeout(retirer, meme.duree ?? 8000);
+    });
+
+    // Le process principal a cache la fenetre : on nettoie derriere lui.
+    window.mur.surRetrait(retirer);
+  </script>
+</body>
+</html>

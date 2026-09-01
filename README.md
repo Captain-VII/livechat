@@ -1,10 +1,11 @@
 # Le mur
 
-Un mur de memes en direct pour une bande de potes. Quelqu'un balance une image
-sur Discord, elle apparait dans la seconde sur une page web ouverte chez tout le
-monde. Pas d'OBS, pas de FFmpeg, pas de compte a creer.
+Les memes de la bande, en direct, **par-dessus ton écran**. Quelqu'un balance une
+image sur Discord, elle s'affiche en grand au milieu de ton écran principal, huit
+secondes, puis disparaît. Pas d'OBS, pas de FFmpeg, pas de compte à créer.
 
-Un seul process : le bot Discord et le serveur web tournent ensemble.
+Une seule application : le bot Discord et la fenêtre tournent dans le même
+processus.
 
 ---
 
@@ -15,50 +16,52 @@ npm install
 cp .env.example .env
 ```
 
-Il faut Node 18 ou plus.
+`npm install` télécharge le binaire Electron, environ 250 Mo. C'est normal, ça
+n'arrive qu'une fois, et rien n'est à installer chez les potes : c'est ta machine
+qui affiche.
 
-## 2. Cote Discord
+## 2. Côté Discord
 
-### 2.1 Creer l'application et le bot
+### 2.1 Créer l'application et le bot
 
 1. Va sur https://discord.com/developers/applications et clique **New Application**.
 2. Onglet **General Information** : copie l'**Application ID** dans `DISCORD_CLIENT_ID` (fichier `.env`).
 3. Onglet **Bot** : clique **Reset Token**, copie le token dans `DISCORD_TOKEN`.
-   Ce token ne se reaffiche jamais, et il ne se commit nulle part.
+   Ce token ne se réaffiche jamais, et il ne se commit nulle part.
 
 ### 2.2 Activer l'intent MESSAGE CONTENT — **obligatoire**
 
 Toujours dans l'onglet **Bot**, section **Privileged Gateway Intents**, active
 **MESSAGE CONTENT INTENT**, puis **Save Changes**.
 
-C'est la cause numero 1 de "ca marche pas". Sans cet intent, le bot voit passer
-les messages du salon mais leur contenu et leurs pieces jointes arrivent vides :
-le mode automatique reste desesperement muet (la commande `/meme`, elle,
-continue de marcher — ce qui rend le probleme encore plus deroutant).
-Si le bot refuse carrement de demarrer avec une erreur `Used disallowed intents`,
-c'est exactement ca.
+C'est la cause numéro 1 de « ça marche pas ». Sans cet intent, le bot voit passer
+les messages du salon mais leur contenu et leurs pièces jointes arrivent vides :
+le mode automatique reste désespérément muet (la commande `/meme`, elle, continue
+de marcher — ce qui rend le problème encore plus déroutant). Si l'application
+refuse carrément de démarrer avec une erreur `Used disallowed intents`, c'est
+exactement ça.
 
-### 2.3 Recuperer l'ID du serveur (recommande)
+### 2.3 Récupérer l'ID du serveur (recommandé)
 
-Dans Discord : **Parametres utilisateur > Avances > Mode developpeur**, puis clic
+Dans Discord : **Paramètres utilisateur > Avancés > Mode développeur**, puis clic
 droit sur ton serveur > **Copier l'identifiant**. Colle-le dans `DISCORD_GUILD_ID`.
 
-- Rempli : `/meme` est enregistree sur ce serveur et **disponible immediatement**.
-- Vide : la commande est enregistree globalement, avec **jusqu'a une heure** de
-  propagation avant d'apparaitre.
+- Rempli : `/meme` est enregistrée sur ce serveur et **disponible immédiatement**.
+- Vide : la commande est enregistrée globalement, avec **jusqu'à une heure** de
+  propagation avant d'apparaître.
 
 ### 2.4 Inviter le bot
 
-Lance le serveur une fois (`npm start`) : l'URL d'invitation est affichee dans la
-console, construite depuis le client ID du bot. Ouvre-la, choisis ton serveur.
+Lance l'application une fois (`npm start`) : l'URL d'invitation est affichée dans
+la console, construite depuis le client ID du bot. Ouvre-la, choisis ton serveur.
 
-Les permissions demandees sont le minimum : voir les salons, lire l'historique,
-repondre.
+Les permissions demandées sont le minimum : voir les salons, lire l'historique,
+répondre.
 
-### 2.5 Creer le salon
+### 2.5 Créer le salon
 
-Cree un salon texte nomme exactement **`mur-a-memes`**. Tout ce qui y est poste
-part sur le mur, sans commande. Verifie que le bot y a acces.
+Crée un salon texte nommé exactement **`mur-a-memes`**. Tout ce qui y est posté
+part à l'écran, sans commande. Vérifie que le bot y a accès.
 
 ## 3. Enregistrer la commande slash
 
@@ -66,8 +69,8 @@ part sur le mur, sans commande. Verifie que le bot y a acces.
 npm run deploy
 ```
 
-A relancer seulement si tu changes la definition de la commande (ou si tu
-ajoutes `DISCORD_GUILD_ID` apres coup).
+À relancer seulement si tu changes la définition de la commande (ou si tu ajoutes
+`DISCORD_GUILD_ID` après coup).
 
 ## 4. Lancer
 
@@ -75,129 +78,100 @@ ajoutes `DISCORD_GUILD_ID` apres coup).
 npm start
 ```
 
-Puis ouvre http://localhost:3000.
+Il n'y a pas de fenêtre à regarder : l'application vit dans la **barre des
+tâches**, à côté de l'horloge. La fenêtre n'apparaît que quand un meme arrive,
+et elle est traversée par les clics — tu peux continuer à jouer ou à bosser
+pendant qu'un meme est affiché.
+
+**Pour quitter, c'est par l'icône dans la barre des tâches.** Il n'y a pas de
+croix à cliquer, c'est le principe même d'un overlay.
+
+L'icône donne aussi : pause, passer le meme affiché, couper le son. Deux
+raccourcis globaux font la même chose sans lâcher la souris :
+
+- `Ctrl+Alt+M` — passe le meme affiché
+- `Ctrl+Alt+P` — met la file en pause (les memes continuent de s'accumuler)
 
 ---
 
 ## Utilisation
 
-**Mode soiree (le principal)** : poste n'importe quoi dans `#mur-a-memes`.
-Image, video, lien direct, ou juste du texte. Plusieurs pieces jointes dans un
-meme message donnent plusieurs feuilles sur le mur.
+**Mode soirée (le principal)** : poste n'importe quoi dans `#mur-a-memes`.
+Image, vidéo, lien direct, ou juste du texte. Plusieurs pièces jointes dans un
+même message donnent plusieurs passages à l'écran.
 
 **Commande** : `/meme` avec au moins une des trois options —
-`fichier` (piece jointe), `texte` (legende ou texte seul), `lien` (URL directe
-vers une image ou une video). Les trois vides : reponse d'erreur visible de toi
-seul. La reponse du bot est toujours ephemere, pour ne pas polluer le salon.
+`fichier` (pièce jointe), `texte` (légende ou texte seul), `lien` (URL directe
+vers une image ou une vidéo). Les trois vides : réponse d'erreur visible de toi
+seul. La réponse du bot est toujours éphémère, pour ne pas polluer le salon.
 
-Les `.mp4` et `.webm` sont rendus en `<video>` autoplay, en boucle, sans son.
-Le reste (`.png`, `.jpg`, `.gif`, `.webp`, `.avif`) en image.
+Les `.mp4` et `.webm` sont joués en boucle **avec le son** pendant leur passage.
+Le reste (`.png`, `.jpg`, `.gif`, `.webp`, `.avif`) en image. Un meme sans image
+devient une affiche : plus le texte est court, plus il est gros.
 
-## Le rythme du mur
+## Le rythme
 
-Trois choses reglent ce qu'on voit, et elles sont toutes reglables dans `.env`.
+**Un meme à la fois.** Chacun a l'écran pour lui pendant `OVERLAY_DURATION_MS`,
+les autres attendent leur tour. Une rafale de huit images ne repeint pas l'écran
+d'un bloc : ça défile. Le bot répond `Dans la file, 3 devant toi.` quand ça
+bouchonne, et au-delà de `QUEUE_MAX` memes en attente, les plus vieux de la file
+sont abandonnés — sinon un plaisantin condamne la soirée à regarder son dossier
+d'images pendant dix minutes.
 
-**La file d'attente.** Les memes se collent **un par un**, au plus un toutes les
-`MEME_INTERVAL_MS` (1,5 s par defaut). Quelqu'un qui balance huit images d'un
-coup ne repeint pas le mur d'un bloc : ca defile, et chaque feuille a son moment.
-Le bot repond `Dans la file, 3 devant toi.` quand ca bouchonne. Au-dela de
-`QUEUE_MAX` memes en attente, les plus vieux de la file sont abandonnes — sinon
-un plaisantin condamne la soiree a regarder son dossier d'images pendant dix
-minutes.
-
-**La taille du mur.** `HISTORY_SIZE` feuilles au maximum (12 par defaut). Quand
-une nouvelle arrive sur un mur plein, la plus ancienne se decolle.
-
-**La duree de vie.** Passe `MEME_TTL_MINUTES` (30 par defaut), une feuille se
-decolle toute seule, chez tout le monde en meme temps, meme si le mur est loin
-d'etre plein. `MEME_TTL_MINUTES=0` desactive la limite de temps : un meme reste
-alors jusqu'a ce que les suivants le poussent dehors.
-
-Le mur affiche exactement le meme etat pour tout le monde : celui qui ouvre la
-page a 3h du matin voit les memes feuilles que celui qui n'a jamais ferme
-l'onglet.
+Il n'y a **pas d'historique**. Un meme passé est passé ; rien n'est gardé, rien
+n'est rejouable. C'est le principe d'un overlay.
 
 ## Configuration
 
-| Variable | Defaut | Role |
+| Variable | Défaut | Rôle |
 | --- | --- | --- |
 | `DISCORD_TOKEN` | — | Token du bot. Requis. |
 | `DISCORD_CLIENT_ID` | — | Application ID. Requis pour `npm run deploy`. |
-| `DISCORD_GUILD_ID` | — | Facultatif. Enregistrement instantane de la commande sur ce serveur. |
-| `PORT` | `3000` | Port de la page du mur. |
-| `HISTORY_SIZE` | `12` | Feuilles au mur, et rattrapage envoye aux retardataires. |
-| `MEME_TTL_MINUTES` | `30` | Duree de vie d'une feuille. `0` = pas de limite de temps. |
-| `MEME_INTERVAL_MS` | `1500` | Delai minimum entre deux memes qui se collent. |
+| `DISCORD_GUILD_ID` | — | Facultatif. Enregistrement instantané de la commande sur ce serveur. |
+| `OVERLAY_DURATION_MS` | `8000` | Temps d'affichage d'un meme. |
+| `OVERLAY_GAP_MS` | `500` | Respiration entre deux memes. |
+| `OVERLAY_VOLUME` | `0.7` | Volume des vidéos, de 0 à 1. |
 | `QUEUE_MAX` | `40` | Taille max de la file d'attente. |
 
-## Ce que le mur ne fait pas
+## Deux limites à connaître
 
-Il n'y a pas de base de donnees. Tout vit dans un tableau en memoire ; un
-redemarrage efface le mur. C'est voulu : c'est ephemere.
+**Jeu en plein écran exclusif : le meme ne s'affichera pas.** Aucune fenêtre ne
+peut se dessiner par-dessus, c'est une limite de Windows et pas un bug de
+l'application. En **plein écran fenêtré** (« borderless »), tout marche — c'est
+le mode par défaut de la plupart des jeux aujourd'hui, et c'est comme ça que
+l'overlay a été vérifié, par-dessus une partie en cours. Si rien n'apparaît
+pendant que tu joues, c'est le premier réglage à changer dans le jeu.
 
-Le mur n'a aucune authentification. Qui a l'URL voit le mur. Pour une soiree
-entre potes c'est le but ; ne le mets pas sur une URL devinable si le contenu te
-gene.
-
----
-
-## Montrer le mur aux potes
-
-Le mur a besoin de **WebSockets** : n'importe quel hebergement qui ne les
-supporte pas ne marchera pas.
-
-### Le temps d'une soiree
-
-Laisse tourner `npm start` sur ta machine, et ouvre un tunnel :
-
-```bash
-npx localtunnel --port 3000
-```
-
-ou, si tu preferes ngrok :
-
-```bash
-ngrok http 3000
-```
-
-Les deux relaient les WebSockets sans configuration. L'URL donnee est a envoyer
-aux potes ; elle meurt quand tu fermes le tunnel. Localtunnel affiche parfois une
-page d'avertissement au premier chargement — il faut cliquer pour passer.
-
-### En permanence
-
-**Railway** : connecte le depot, ajoute les variables d'environnement,
-`npm start` est detecte tout seul. WebSockets supportes par defaut.
-
-**Fly.io** : `fly launch` puis `fly deploy`. Passe les secrets avec
-`fly secrets set DISCORD_TOKEN=... DISCORD_CLIENT_ID=...`. Dans `fly.toml`,
-garde `force_https` et laisse `auto_stop_machines` a `false` — une machine qui
-s'endort coupe le bot et vide l'historique.
-
-Dans les deux cas, ne fixe pas `PORT` a la main : la plateforme l'injecte.
+**Écran noir à la place de la transparence.** Sur certaines configurations
+graphiques, une fenêtre transparente se peint en noir. Le contournement est
+`app.disableHardwareAcceleration()` en tête de `src/main.js` — il n'est pas
+activé par défaut parce qu'il dégrade la lecture des vidéos.
 
 ## Structure
 
 ```
-src/index.js             serveur web + bot Discord, un seul process
-src/deploy-commands.js   enregistrement de /meme, a lancer a la main
-src/public/index.html    la page du mur, autonome
-.env.example
+src/main.js             la fenêtre overlay, le bot Discord et la file d'attente
+src/preload.cjs         le pont entre le processus principal et la fenêtre
+src/overlay.html        ce qui s'affiche, autonome
+src/deploy-commands.js  enregistrement de /meme, à lancer à la main
 ```
 
-## Ca ne marche pas
+## Ça ne marche pas
 
-**Rien n'apparait quand je poste dans le salon** — l'intent MESSAGE CONTENT
-n'est pas active (voir 2.2), ou le salon ne s'appelle pas exactement
-`mur-a-memes`, ou le bot n'a pas acces au salon.
+**Rien n'apparaît quand je poste dans le salon** — l'intent MESSAGE CONTENT n'est
+pas activé (voir 2.2), ou le salon ne s'appelle pas exactement `mur-a-memes`, ou
+le bot n'y a pas accès.
 
-**`/meme` n'existe pas dans Discord** — `npm run deploy` n'a pas ete lance, ou
-`DISCORD_GUILD_ID` est vide et la commande globale n'est pas encore propagee.
+**`/meme` n'existe pas dans Discord** — `npm run deploy` n'a pas été lancé, ou
+`DISCORD_GUILD_ID` est vide et la commande globale n'est pas encore propagée.
 
-**La page reste vide meme apres un meme envoye** — regarde la console du
-serveur : chaque meme accepte y est logue. Si la ligne apparait mais pas le mur,
-c'est le WebSocket qui ne passe pas (proxy ou hebergement sans support WS).
+**Le bot répond mais rien ne s'affiche** — regarde la console : chaque meme
+accepté y est logué. Si la ligne apparaît, c'est l'affichage : jeu en plein écran
+exclusif (voir plus haut), ou file en pause (`Ctrl+Alt+P` pour reprendre).
 
-**Le bot repond `Ce lien ne ressemble pas a une image`** — `lien` doit pointer
+**`Le mur tourne déjà`** — une instance précédente n'a pas été fermée. Son icône
+est dans la barre des tâches ; quitte-la depuis là.
+
+**Le bot répond `Ce lien ne ressemble pas à une image`** — `lien` doit pointer
 directement sur le fichier (l'URL finit par `.jpg`, `.png`, `.gif`, `.webp`,
 `.mp4`, `.webm`), pas sur une page qui contient l'image.
