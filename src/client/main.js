@@ -88,6 +88,13 @@ function urlServeur() {
 let socket = null;
 let tentativeReconnexion = null;
 
+// Backoff progressif : une micro-coupure (wifi qui tousse une seconde) se
+// rattrape presque tout de suite, une vraie panne n'assomme pas le serveur
+// de tentatives.
+const DELAI_RECONNEXION_MIN_MS = 500;
+const DELAI_RECONNEXION_MAX_MS = 8000;
+let delaiReconnexion = DELAI_RECONNEXION_MIN_MS;
+
 function connecter() {
   const url = urlServeur();
   if (!url) {
@@ -108,6 +115,7 @@ function connecter() {
 
   socket.addEventListener('open', () => {
     console.log('[mur] Connecte au serveur.');
+    delaiReconnexion = DELAI_RECONNEXION_MIN_MS;
     majMenu();
   });
 
@@ -124,10 +132,11 @@ function connecter() {
   });
 
   socket.addEventListener('close', () => {
-    console.warn('[mur] Deconnecte du serveur. Nouvelle tentative dans 3 s.');
+    console.warn(`[mur] Deconnecte du serveur. Nouvelle tentative dans ${delaiReconnexion} ms.`);
     majMenu();
     clearTimeout(tentativeReconnexion);
-    tentativeReconnexion = setTimeout(connecter, 3000);
+    tentativeReconnexion = setTimeout(connecter, delaiReconnexion);
+    delaiReconnexion = Math.min(delaiReconnexion * 2, DELAI_RECONNEXION_MAX_MS);
   });
 
   socket.addEventListener('error', () => {

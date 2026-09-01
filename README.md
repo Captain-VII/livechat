@@ -262,6 +262,12 @@ plaisantin condamne la soirée à regarder son dossier d'images pendant dix
 minutes. C'est le serveur qui tient l'horloge : le rythme est identique pour
 tout le monde, quel que soit le nombre de clients connectés.
 
+**En cas d'accroc réseau** (tunnel qui tousse, wifi qui coupe une seconde), un
+client qui se reconnecte pendant qu'un meme est à l'écran le rattrape aussitôt,
+avec le temps qu'il lui reste — pas un plein cycle qui le désynchroniserait des
+autres. Le serveur détecte aussi les connexions mortes en ~15 s au lieu de
+compter sur le système d'exploitation, qui peut mettre plusieurs minutes.
+
 ## Choisir l'écran (par client)
 
 Chacun choisit son propre écran, indépendamment des autres. Au démarrage, la

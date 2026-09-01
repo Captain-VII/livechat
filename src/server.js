@@ -83,6 +83,14 @@ let minuteur = null;
 let enPause = false;
 
 /**
+ * Le meme actuellement a l'ecran, pour rattraper qui se (re)connecte pendant
+ * qu'il tourne encore. Sans ca, un accroc reseau d'une seconde suffit a rater
+ * un meme pour de bon : rien ne le rejoue jamais.
+ * @type {{ meme: object, finPrevue: number } | null}
+ */
+let enCours = null;
+
+/**
  * Met un meme dans la file. Renvoie le nombre de memes devant lui.
  * Rien n'est fige ici : id et rotation sont decides au moment ou le meme est
  * vraiment diffuse.
@@ -112,6 +120,7 @@ function defiler() {
 
   const meme = file.shift();
   if (!meme) {
+    enCours = null;
     diffuser({ type: 'retrait' });
     return;
   }
@@ -124,6 +133,7 @@ function defiler() {
     ...meme,
   };
 
+  enCours = { meme: feuille, finPrevue: Date.now() + DUREE_MS };
   diffuser({ type: 'meme', meme: feuille });
   console.log(`[mur] ${feuille.author.name} -> ${feuille.mediaUrl ?? feuille.text ?? ''}`);
   minuteur = setTimeout(defiler, DUREE_MS + GAP_MS);
@@ -132,6 +142,7 @@ function defiler() {
 function passer() {
   if (minuteur) clearTimeout(minuteur);
   minuteur = null;
+  enCours = null;
   diffuser({ type: 'retrait' });
   relancer();
 }
@@ -227,10 +238,41 @@ function diffuser(message) {
 wss.on('connection', (socket, requete) => {
   const adresse = requete.socket.remoteAddress;
   console.log(`[mur] Overlay connecte (${adresse}). ${wss.clients.size} au total.`);
+
+  // Rattrapage : qui se connecte (ou se reconnecte apres un accroc reseau)
+  // pendant qu'un meme est deja a l'ecran le recoit tout de suite, avec le
+  // temps qu'il lui reste plutot qu'un plein 8s qui le desynchroniserait des
+  // autres.
+  if (enCours) {
+    const restant = enPause ? enCours.meme.duree : enCours.finPrevue - Date.now();
+    if (restant > 300) {
+      socket.send(JSON.stringify({ type: 'meme', meme: { ...enCours.meme, duree: restant } }));
+    }
+  }
+
+  // Le protocole websocket repond tout seul aux ping : ca sert surtout au
+  // serveur a reperer une connexion morte sans attendre le timeout TCP, qui
+  // peut prendre plusieurs minutes derriere un tunnel.
+  socket.estVivant = true;
+  socket.on('pong', () => {
+    socket.estVivant = true;
+  });
+
   socket.on('close', () => {
     console.log(`[mur] Overlay deconnecte. ${wss.clients.size} restant(s).`);
   });
 });
+
+setInterval(() => {
+  for (const socket of wss.clients) {
+    if (socket.estVivant === false) {
+      socket.terminate();
+      continue;
+    }
+    socket.estVivant = false;
+    socket.ping();
+  }
+}, 15000).unref();
 
 serveurHttp.listen(PORT, () => {
   console.log(`[mur] Serveur pret sur le port ${PORT}.`);
