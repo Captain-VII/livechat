@@ -114,45 +114,69 @@ plus redemandée ensuite.
 ## 4. Exposer le serveur à tes potes
 
 Ton PC n'est pas visible depuis internet par défaut. Un **tunnel** ouvre un
-passage temporaire, sans configurer ta box, sans compte payant.
+passage temporaire, sans configurer ta box, sans compte payant — et depuis la
+v1.1, **le serveur s'en occupe tout seul** : il ouvre le tunnel au démarrage et
+poste l'adresse dans `#mur-a-memes` automatiquement.
 
-### Cloudflare Tunnel (recommandé, gratuit, sans compte)
+### Installer cloudflared (une fois)
 
 ```bash
-cloudflared tunnel --url http://localhost:8787
+winget install --id Cloudflare.cloudflared
 ```
 
-*(installe `cloudflared` une fois : `winget install --id Cloudflare.cloudflared`)*
+C'est tout. Au prochain `npm run server`, le déroulé est :
 
-La commande affiche une adresse du genre
-`https://quelque-chose-au-hasard.trycloudflare.com`. C'est du HTTP, mais le
-client se connecte en WebSocket sécurisé : remplace `https://` par `wss://` —
-donne à tes potes `wss://quelque-chose-au-hasard.trycloudflare.com`.
+1. Le serveur démarre et se connecte à Discord.
+2. Il ouvre un tunnel Cloudflare vers son propre port.
+3. Dès que l'adresse est prête **et** que le bot est connecté, il poste dans
+   `#mur-a-memes` :
 
-Cette adresse **change à chaque lancement** du tunnel. Renvoie-la dans Discord
-en début de soirée.
+   > **Le mur est en ligne.** Colle cette adresse dans l'appli (icône de la
+   > barre des tâches > *Configurer le serveur*) :
+   > ```
+   > wss://quelque-chose-au-hasard.trycloudflare.com
+   > ```
 
-### ngrok (alternative)
+4. Chacun colle cette adresse dans la fenêtre qui s'ouvre au premier lancement
+   de son client (`npm start` en développement, ou le `.exe`).
+
+Cette adresse **change à chaque lancement** du serveur — c'est le principe d'un
+tunnel gratuit sans compte. Le message est donc reposté à chaque démarrage,
+sans que tu aies rien à copier-coller toi-même.
+
+### Réglages (`.env`, section serveur)
+
+| Variable | Défaut | Rôle |
+| --- | --- | --- |
+| `AUTO_TUNNEL` | `cloudflare` | `cloudflare` pour le tunnel automatique, `none` pour le désactiver. |
+| `ANNOUNCE_CHANNEL` | — | Salon où poster l'adresse. Vide : le même que `#mur-a-memes`. |
+
+Si `cloudflared` n'est pas installé, le serveur le signale clairement dans sa
+console et continue de tourner normalement — seule l'annonce automatique
+manque, le reste (bot, file d'attente, connexions locales) n'est pas affecté.
+
+### `AUTO_TUNNEL=none` : tunnel manuel ou alternative
+
+Pour piloter le tunnel toi-même (ngrok, un tunnel Cloudflare nommé avec ton
+propre compte, ou un hébergement fixe) :
+
+```bash
+AUTO_TUNNEL=none npm run server
+```
+
+Puis, dans un second terminal :
 
 ```bash
 ngrok http 8787
 ```
 
-Même principe, même limite d'adresse changeante sur le plan gratuit. Là aussi,
-prends l'adresse en `wss://` pour le client.
+Récupère l'adresse générée, remplace `https://` par `wss://`, et donne-la à la
+main dans Discord ou directement à tes potes.
 
-### Concrètement, pour une soirée
-
-1. `npm run server` — le bot se connecte.
-2. `cloudflared tunnel --url http://localhost:8787` dans un second terminal.
-3. Colle l'adresse `wss://...` dans Discord.
-4. Chacun lance son client (`npm start` en développement, ou le `.exe` — voir
-   plus bas), colle cette adresse dans la fenêtre qui s'ouvre au premier
-   lancement.
-
-**Limite à connaître** : si ton PC s'éteint ou perd le réseau, l'overlay de tout
-le monde s'arrête — c'est ta machine qui fait tourner le bot. Pour une soirée où
-tu es de toute façon devant ton PC, ce n'est en général pas un problème.
+**Limite à connaître, dans tous les cas** : si ton PC s'éteint ou perd le
+réseau, l'overlay de tout le monde s'arrête — c'est ta machine qui fait tourner
+le bot. Pour une soirée où tu es de toute façon devant ton PC, ce n'est en
+général pas un problème.
 
 ---
 
@@ -320,6 +344,13 @@ la recolle dans « Configurer le serveur ».
 **`Le mur tourne déjà`** — une instance du client tourne déjà sur cette
 machine. Son icône est dans la barre des tâches ; quitte-la depuis là avant
 d'en relancer une.
+
+**Aucune adresse postée dans Discord au démarrage du serveur** — regarde la
+console : `[tunnel] cloudflared introuvable` veut dire qu'il faut l'installer
+(`winget install --id Cloudflare.cloudflared`). `AUTO_TUNNEL=none` dans `.env`
+désactive volontairement l'automatique. Si le tunnel a démarré mais que rien
+n'est posté, vérifie que `#mur-a-memes` (ou `ANNOUNCE_CHANNEL`) existe bien et
+que le bot y a accès.
 
 **`/meme lien:` refuse mon lien de GIF** — l'option `lien` veut une URL qui finit
 par `.jpg`, `.png`, `.gif`, `.webp`, `.mp4` ou `.webm`. Un lien du sélecteur GIF

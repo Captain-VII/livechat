@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import path from 'node:path';
 import http from 'node:http';
+import { spawn } from 'node:child_process';
 
 import { WebSocketServer } from 'ws';
 import {
@@ -36,6 +37,14 @@ const FILE_MAX = reglage('QUEUE_MAX', 40, { min: 1 });
 
 // Combien de temps on laisse a Discord pour resoudre l'embed d'un lien.
 const ATTENTE_EMBED_MS = reglage('EMBED_WAIT_MS', 6000, { min: 500 });
+
+// 'cloudflare' : un tunnel s'ouvre tout seul au demarrage et son adresse est
+// postee dans Discord. 'none' : rien d'automatique, expose le port toi-meme.
+const MODE_TUNNEL = (process.env.AUTO_TUNNEL ?? 'cloudflare').trim().toLowerCase();
+
+// Salon ou l'adresse du tunnel est annoncee. Par defaut, le meme que celui
+// qui recoit les memes.
+const SALON_ANNONCE = (process.env.ANNOUNCE_CHANNEL ?? '').trim() || WALL_CHANNEL;
 
 const VIDEO_EXTENSIONS = ['.mp4', '.webm'];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp'];
@@ -206,7 +215,98 @@ serveurHttp.listen(PORT, () => {
   console.log(
     `[mur] Overlay local : lance le client avec SERVER_URL=ws://localhost:${PORT}`,
   );
+  demarrerTunnel();
 });
+
+// --------------------------------------------------------------------------
+// Le tunnel : sans lui, exposer le serveur a des potes demande de copier-coller
+// une adresse a la main a chaque soiree. cloudflared le fait, et son adresse
+// part directement dans Discord des qu'elle est connue.
+// --------------------------------------------------------------------------
+
+let urlPublique = null; // wss://... une fois le tunnel pret
+let botPret = false;
+let dejaAnnonce = false;
+let processusTunnel = null;
+
+function demarrerTunnel() {
+  if (MODE_TUNNEL === 'none' || MODE_TUNNEL === 'non') {
+    console.log("[tunnel] AUTO_TUNNEL=none : lance le tien a la main si besoin.");
+    return;
+  }
+
+  console.log('[tunnel] Ouverture d\'un tunnel Cloudflare...');
+  processusTunnel = spawn('cloudflared', ['tunnel', '--url', `http://localhost:${PORT}`]);
+
+  // cloudflared journalise tout sur stderr, y compris l'adresse generee.
+  let tampon = '';
+  processusTunnel.stderr.setEncoding('utf8');
+  processusTunnel.stderr.on('data', (morceau) => {
+    tampon += morceau;
+
+    if (!urlPublique) {
+      const trouve = tampon.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+      if (trouve) {
+        urlPublique = trouve[0].replace(/^https:/, 'wss:');
+        console.log(`[tunnel] Adresse publique : ${urlPublique}`);
+        annoncerSiPret();
+      }
+    }
+
+    // On ne recopie pas tout le log de cloudflared (tres bavard) : juste ses erreurs.
+    for (const ligne of morceau.split('\n')) {
+      if (/\bERR\b/.test(ligne)) console.warn(`[tunnel] ${ligne.trim()}`);
+    }
+  });
+
+  processusTunnel.on('error', (erreur) => {
+    if (erreur.code === 'ENOENT') {
+      console.error('[tunnel] cloudflared introuvable. Installe-le avec :');
+      console.error('[tunnel]   winget install --id Cloudflare.cloudflared');
+      console.error("[tunnel] Ou mets AUTO_TUNNEL=none et lance ton propre tunnel a la main.");
+    } else {
+      console.error('[tunnel] Erreur :', erreur.message);
+    }
+  });
+
+  processusTunnel.on('exit', (code) => {
+    if (code !== 0 && code !== null) {
+      console.warn(`[tunnel] cloudflared s'est arrete (code ${code}).`);
+    }
+  });
+}
+
+/** Poste l'adresse dans Discord des que le tunnel ET le bot sont prets. */
+async function annoncerSiPret() {
+  if (dejaAnnonce || !urlPublique || !botPret) return;
+  dejaAnnonce = true;
+
+  const salons = client.channels.cache.filter(
+    (c) =>
+      c.name === SALON_ANNONCE &&
+      typeof c.send === 'function' &&
+      (!process.env.DISCORD_GUILD_ID || c.guild?.id === process.env.DISCORD_GUILD_ID),
+  );
+
+  if (salons.size === 0) {
+    console.warn(`[tunnel] Aucun salon #${SALON_ANNONCE} trouve pour annoncer l'adresse.`);
+    console.warn(`[tunnel] Donne-la a la main : ${urlPublique}`);
+    return;
+  }
+
+  for (const salon of salons.values()) {
+    try {
+      await salon.send(
+        "**Le mur est en ligne.** Colle cette adresse dans l'appli " +
+          "(icone de la barre des taches > *Configurer le serveur*) :\n" +
+          `\`\`\`\n${urlPublique}\n\`\`\``,
+      );
+      console.log(`[tunnel] Adresse annoncee dans #${salon.name} (${salon.guild.name}).`);
+    } catch (erreur) {
+      console.error(`[tunnel] Envoi impossible dans #${salon.name} :`, erreur.message);
+    }
+  }
+}
 
 // --------------------------------------------------------------------------
 // Bot Discord
@@ -229,6 +329,9 @@ client.once(Events.ClientReady, (ready) => {
     '&permissions=68608&scope=bot%20applications.commands';
   console.log(`[bot] Invitation : ${invite}`);
   console.log(`[bot] Salon ecoute automatiquement : #${WALL_CHANNEL}`);
+
+  botPret = true;
+  annoncerSiPret();
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -398,6 +501,7 @@ if (!process.env.DISCORD_TOKEN) {
 
 process.on('SIGINT', () => {
   console.log('\n[mur] Arret.');
+  processusTunnel?.kill();
   client.destroy().catch(() => {});
   process.exit(0);
 });
