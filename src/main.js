@@ -41,6 +41,9 @@ const GAP_MS = reglage('OVERLAY_GAP_MS', 500);
 const VOLUME = reglage('OVERLAY_VOLUME', 0.7, { min: 0, max: 1 });
 const FILE_MAX = reglage('QUEUE_MAX', 40, { min: 1 });
 
+// Combien de temps on laisse a Discord pour resoudre l'embed d'un lien.
+const ATTENTE_EMBED_MS = reglage('EMBED_WAIT_MS', 6000, { min: 500 });
+
 // Sur quel ecran les memes apparaissent. Vide ou "principal" : l'ecran principal.
 // Sinon un numero (celui affiche au demarrage et dans le menu) ou un bout du nom
 // de l'ecran, ce qui resiste au reordonnancement de Windows.
@@ -203,11 +206,29 @@ function mediaTypeOf(url, contentType) {
   return null;
 }
 
-/** Premiere URL du texte qui ressemble a une image ou une video. */
+function urlsDe(texte) {
+  return texte?.match(/https?:\/\/\S+/gi) ?? [];
+}
+
+/** Premiere URL du texte qui pointe directement sur une image ou une video. */
 function findMediaUrl(text) {
-  if (!text) return null;
-  const urls = text.match(/https?:\/\/\S+/gi) ?? [];
-  return urls.find((url) => mediaTypeOf(url) !== null) ?? null;
+  return urlsDe(text).find((url) => mediaTypeOf(url) !== null) ?? null;
+}
+
+/**
+ * Cherche un media dans les embeds resolus par Discord. C'est par la qu'arrivent
+ * les GIF des selecteurs integres (Klipy, Tenor, Giphy...) : leur lien n'a pas
+ * d'extension, seul Discord sait a quel fichier il correspond. On ne code donc
+ * aucune liste d'hebergeurs, on lit ce que Discord a trouve.
+ */
+function mediaDesEmbeds(embeds) {
+  for (const embed of embeds ?? []) {
+    for (const url of [embed.video?.url, embed.image?.url, embed.thumbnail?.url]) {
+      const mediaType = url ? mediaTypeOf(url) : null;
+      if (mediaType) return { mediaUrl: url, mediaType };
+    }
+  }
+  return null;
 }
 
 function authorOf(user, member) {
@@ -419,7 +440,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (mediaUrl && !mediaType) {
     await interaction.reply({
       content:
-        'Ce lien ne ressemble pas a une image ou une video (jpg, png, gif, webp, mp4, webm).',
+        'Ce lien ne pointe pas directement sur un fichier (jpg, png, gif, webp, mp4, webm).\n' +
+        `Pour un GIF du selecteur Discord, poste-le directement dans #${WALL_CHANNEL} : ` +
+        'la, Discord resout le lien tout seul.',
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -438,10 +461,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
   });
 });
 
-client.on(Events.MessageCreate, (message) => {
-  if (message.author.bot) return; // sinon, boucle
-  if (message.channel?.name !== WALL_CHANNEL) return;
+/**
+ * Messages dont on attend encore l'embed de Discord.
+ * @type {Map<string, { author: object, text: string|null, minuteur: NodeJS.Timeout }>}
+ */
+const attenteEmbed = new Map();
 
+function traiterMessage(message) {
   const author = authorOf(message.author, message.member);
   const attachments = [...message.attachments.values()].filter(
     (a) => mediaTypeOf(a.url, a.contentType) !== null,
@@ -471,9 +497,69 @@ client.on(Events.MessageCreate, (message) => {
     return;
   }
 
+  // Parfois Discord a deja resolu l'embed quand le message nous parvient.
+  const media = mediaDesEmbeds(message.embeds);
+  const liens = urlsDe(message.content);
+  const texteSeul = liens.reduce((t, l) => t.replace(l, ''), message.content).trim() || null;
+
+  if (media) {
+    enfiler({ author, text: texteSeul, ...media });
+    return;
+  }
+
+  if (liens.length > 0) {
+    // Un lien de GIF n'a pas d'extension : c'est Discord qui dira a quoi il
+    // correspond, une fraction de seconde plus tard. On patiente plutot que
+    // d'afficher l'URL en toutes lettres.
+    patienter(message, author, texteSeul);
+    return;
+  }
+
   if (message.content.trim()) {
     enfiler({ author, text: message.content.trim(), mediaUrl: null, mediaType: null });
   }
+}
+
+/** Met un message de cote le temps que Discord lui attache son embed. */
+function patienter(message, author, text) {
+  if (attenteEmbed.has(message.id)) return;
+
+  const minuteur = setTimeout(() => {
+    attenteEmbed.delete(message.id);
+    if (text) {
+      // Le lien n'a rien donne, mais il y avait autre chose a dire.
+      enfiler({ author, text, mediaUrl: null, mediaType: null });
+    } else {
+      console.warn(`[mur] Lien sans media utilisable, laisse de cote : ${message.content.trim()}`);
+    }
+  }, ATTENTE_EMBED_MS);
+
+  attenteEmbed.set(message.id, { author, text, minuteur });
+}
+
+client.on(Events.MessageCreate, (message) => {
+  if (message.author.bot) return; // sinon, boucle
+  if (message.channel?.name !== WALL_CHANNEL) return;
+  traiterMessage(message);
+});
+
+/** L'embed arrive apres coup : c'est ici que les GIF finissent par tomber. */
+function resoudreEmbed(message) {
+  const attente = attenteEmbed.get(message?.id);
+  if (!attente) return;
+
+  const media = mediaDesEmbeds(message.embeds);
+  if (!media) return;
+
+  clearTimeout(attente.minuteur);
+  attenteEmbed.delete(message.id);
+  enfiler({ author: attente.author, text: attente.text, ...media });
+}
+
+client.on(Events.MessageUpdate, async (_avant, apres) => {
+  if (!attenteEmbed.has(apres?.id)) return;
+  const message = apres.partial ? await apres.fetch().catch(() => null) : apres;
+  if (message) resoudreEmbed(message);
 });
 
 // --------------------------------------------------------------------------

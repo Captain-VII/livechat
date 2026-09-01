@@ -143,6 +143,16 @@ Les `.mp4` et `.webm` sont joués en boucle **avec le son** pendant leur passage
 Le reste (`.png`, `.jpg`, `.gif`, `.webp`, `.avif`) en image. Un meme sans image
 devient une affiche : plus le texte est court, plus il est gros.
 
+**Les GIF du sélecteur Discord marchent aussi** (Klipy, Tenor, Giphy…). Leur lien
+n'a pas d'extension — `https://klipy.com/gifs/greetings-PSr` ne dit pas à quel
+fichier il correspond. C'est Discord qui le résout, une fraction de seconde après
+l'envoi : l'application attend cet embed (`EMBED_WAIT_MS`, 6 s par défaut) au lieu
+d'afficher l'URL en toutes lettres. Aucun hébergeur n'est codé en dur, donc ceux
+qui apparaîtront demain marcheront aussi.
+
+Un lien qui ne donne rien au bout du délai est laissé de côté, avec un mot dans
+la console. S'il y avait une phrase à côté du lien, c'est elle qui s'affiche.
+
 ## Le rythme
 
 **Un meme à la fois.** Chacun a l'écran pour lui pendant `OVERLAY_DURATION_MS`,
@@ -167,6 +177,7 @@ n'est rejouable. C'est le principe d'un overlay.
 | `OVERLAY_GAP_MS` | `500` | Respiration entre deux memes. |
 | `OVERLAY_VOLUME` | `0.7` | Volume des vidéos, de 0 à 1. |
 | `QUEUE_MAX` | `40` | Taille max de la file d'attente. |
+| `EMBED_WAIT_MS` | `6000` | Délai laissé à Discord pour résoudre le lien d'un GIF. |
 
 ## Deux limites à connaître
 
@@ -213,6 +224,10 @@ l'écran, qui ne bouge pas.
 **`Le mur tourne déjà`** — une instance précédente n'a pas été fermée. Son icône
 est dans la barre des tâches ; quitte-la depuis là.
 
-**Le bot répond `Ce lien ne ressemble pas à une image`** — `lien` doit pointer
-directement sur le fichier (l'URL finit par `.jpg`, `.png`, `.gif`, `.webp`,
-`.mp4`, `.webm`), pas sur une page qui contient l'image.
+**`/meme lien:` refuse mon lien de GIF** — l'option `lien` veut une URL qui finit
+par `.jpg`, `.png`, `.gif`, `.webp`, `.mp4` ou `.webm`. Un lien du sélecteur GIF
+n'en est pas un : poste-le directement dans `#mur-a-memes`, c'est là que Discord
+le résout.
+
+**Un GIF s'affiche en texte** — le délai d'attente de l'embed a expiré avant que
+Discord réponde. Monte `EMBED_WAIT_MS` si ta connexion traîne.
