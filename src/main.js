@@ -41,6 +41,11 @@ const GAP_MS = reglage('OVERLAY_GAP_MS', 500);
 const VOLUME = reglage('OVERLAY_VOLUME', 0.7, { min: 0, max: 1 });
 const FILE_MAX = reglage('QUEUE_MAX', 40, { min: 1 });
 
+// Sur quel ecran les memes apparaissent. Vide ou "principal" : l'ecran principal.
+// Sinon un numero (celui affiche au demarrage et dans le menu) ou un bout du nom
+// de l'ecran, ce qui resiste au reordonnancement de Windows.
+const ECRAN_VOULU = (process.env.OVERLAY_DISPLAY ?? '').trim();
+
 const VIDEO_EXTENSIONS = ['.mp4', '.webm'];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp'];
 
@@ -68,6 +73,7 @@ let enPause = false;
 let sonCoupe = false;
 let fenetre = null;
 let tray = null;
+let ecranChoisiId = null;
 
 /**
  * Met un meme dans la file. Renvoie le nombre de memes devant lui.
@@ -214,11 +220,79 @@ function authorOf(user, member) {
 }
 
 // --------------------------------------------------------------------------
-// La fenetre : tout l'ecran principal, transparente, traversee par les clics
+// Le choix de l'ecran : personne ne veut d'un meme en plein milieu d'une ranked.
+// --------------------------------------------------------------------------
+
+/** Les ecrans, le principal en tete, puis de gauche a droite. */
+function ecrans() {
+  const principal = screen.getPrimaryDisplay();
+  return screen.getAllDisplays().sort((a, b) => {
+    if (a.id === principal.id) return -1;
+    if (b.id === principal.id) return 1;
+    return a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y;
+  });
+}
+
+function decrire(ecran, index) {
+  const principal = ecran.id === screen.getPrimaryDisplay().id ? ' (principal)' : '';
+  const nom = ecran.label || `ecran ${index + 1}`;
+  return `${index + 1}. ${nom} - ${ecran.bounds.width}x${ecran.bounds.height}${principal}`;
+}
+
+/** Resout OVERLAY_DISPLAY. Retombe sur le principal plutot que de ne rien afficher. */
+function ecranVoulu() {
+  const liste = ecrans();
+  if (!ECRAN_VOULU || /^(principal|primary)$/i.test(ECRAN_VOULU)) return liste[0];
+
+  const numero = Number(ECRAN_VOULU);
+  const trouve = Number.isInteger(numero)
+    ? liste[numero - 1]
+    : liste.find((e) => e.label?.toLowerCase().includes(ECRAN_VOULU.toLowerCase()));
+
+  if (trouve) return trouve;
+
+  console.warn(`[mur] OVERLAY_DISPLAY="${ECRAN_VOULU}" ne correspond a aucun ecran.`);
+  console.warn('[mur] On reste sur le principal. Ecrans disponibles :');
+  liste.forEach((e, i) => console.warn(`[mur]   ${decrire(e, i)}`));
+  return liste[0];
+}
+
+/** Deplace l'overlay sur un ecran, tout de suite. */
+function placerSur(ecran) {
+  if (!ecran) return;
+  ecranChoisiId = ecran.id;
+
+  if (fenetre && !fenetre.isDestroyed()) {
+    // La fenetre est figee (transparent + resizable est instable sur Windows) :
+    // on la degele juste le temps de la reposer sur l'autre ecran.
+    fenetre.setResizable(true);
+    fenetre.setBounds(ecran.bounds);
+    fenetre.setResizable(false);
+  }
+
+  console.log(`[mur] Les memes s'affichent sur : ${ecran.label} (${ecran.bounds.width}x${ecran.bounds.height}).`);
+  majMenu();
+}
+
+/** Un ecran branche, debranche ou redimensionne : on se recale. */
+function surChangementEcrans() {
+  const actuel = screen.getAllDisplays().find((e) => e.id === ecranChoisiId);
+  if (actuel) {
+    placerSur(actuel); // ses bornes ont pu changer
+    return;
+  }
+  console.warn("[mur] L'ecran choisi a disparu.");
+  placerSur(ecranVoulu());
+}
+
+// --------------------------------------------------------------------------
+// La fenetre : tout l'ecran choisi, transparente, traversee par les clics
 // --------------------------------------------------------------------------
 
 function creerFenetre() {
-  const { bounds } = screen.getPrimaryDisplay();
+  const ecran = ecranVoulu();
+  ecranChoisiId = ecran.id;
+  const { bounds } = ecran;
 
   fenetre = new BrowserWindow({
     // bounds et pas workArea : on couvre aussi la barre des taches.
@@ -251,6 +325,11 @@ function creerFenetre() {
   fenetre.setIgnoreMouseEvents(true, { forward: true });
   fenetre.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   fenetre.loadFile(path.join(__dirname, 'overlay.html'));
+
+  // A la creation, Windows rabote la fenetre a la zone de travail : elle perd la
+  // hauteur de la barre des taches. On repose les bornes exactes par le meme
+  // chemin que le changement d'ecran.
+  placerSur(ecran);
 }
 
 // --------------------------------------------------------------------------
@@ -274,6 +353,15 @@ function majMenu() {
       { label: enPause ? 'Reprendre' : 'Pause', click: basculerPause },
       { label: 'Passer ce meme', click: passer },
       { label: sonCoupe ? 'Retablir le son' : 'Couper le son', click: basculerSon },
+      {
+        label: 'Afficher sur',
+        submenu: ecrans().map((ecran, index) => ({
+          label: decrire(ecran, index),
+          type: 'radio',
+          checked: ecran.id === ecranChoisiId,
+          click: () => placerSur(ecran),
+        })),
+      },
       { type: 'separator' },
       { label: 'Quitter', click: () => app.quit() },
     ]),
@@ -403,6 +491,16 @@ if (!app.requestSingleInstanceLock()) {
 
     globalShortcut.register('Control+Alt+M', passer);
     globalShortcut.register('Control+Alt+P', basculerPause);
+
+    screen.on('display-added', surChangementEcrans);
+    screen.on('display-removed', surChangementEcrans);
+    screen.on('display-metrics-changed', surChangementEcrans);
+
+    console.log('[mur] Ecrans detectes (numero a mettre dans OVERLAY_DISPLAY) :');
+    ecrans().forEach((ecran, index) => {
+      const ici = ecran.id === ecranChoisiId ? '  <-- les memes s\'affichent ici' : '';
+      console.log(`[mur]   ${decrire(ecran, index)}${ici}`);
+    });
 
     console.log(`[mur] Overlay pret : un meme a la fois, ${DUREE_MS} ms chacun.`);
     console.log('[mur] Ctrl+Alt+M passe le meme affiche, Ctrl+Alt+P met la file en pause.');

@@ -1,8 +1,8 @@
 # Le mur
 
 Les memes de la bande, en direct, **par-dessus ton écran**. Quelqu'un balance une
-image sur Discord, elle s'affiche en grand au milieu de ton écran principal, huit
-secondes, puis disparaît. Pas d'OBS, pas de FFmpeg, pas de compte à créer.
+image sur Discord, elle s'affiche en grand au milieu de l'écran de ton choix,
+huit secondes, puis disparaît. Pas d'OBS, pas de FFmpeg, pas de compte à créer.
 
 Une seule application : le bot Discord et la fenêtre tournent dans le même
 processus.
@@ -86,11 +86,45 @@ pendant qu'un meme est affiché.
 **Pour quitter, c'est par l'icône dans la barre des tâches.** Il n'y a pas de
 croix à cliquer, c'est le principe même d'un overlay.
 
-L'icône donne aussi : pause, passer le meme affiché, couper le son. Deux
-raccourcis globaux font la même chose sans lâcher la souris :
+L'icône donne aussi : pause, passer le meme affiché, couper le son, et **choisir
+l'écran**. Deux raccourcis globaux font le reste sans lâcher la souris :
 
 - `Ctrl+Alt+M` — passe le meme affiché
 - `Ctrl+Alt+P` — met la file en pause (les memes continuent de s'accumuler)
+
+## Choisir l'écran
+
+Par défaut les memes s'affichent sur l'écran principal. Si tu joues dessus, ce
+n'est pas ce que tu veux : un meme en plein milieu d'une ranked, c'est vite
+arrivé. Envoie-les sur ton deuxième écran.
+
+Au démarrage, la console liste tes écrans numérotés :
+
+```
+[mur] Ecrans detectes (numero a mettre dans OVERLAY_DISPLAY) :
+[mur]   1. MAG 274Q X24 — 2560x1440 (principal)  <-- les memes s'affichent ici
+[mur]   2. MAG 274QF X24 — 1440x2560
+```
+
+`OVERLAY_DISPLAY` accepte trois formes :
+
+- `principal` (ou vide) — l'écran principal.
+- un numéro — `OVERLAY_DISPLAY=2`, celui de la liste ci-dessus.
+- un bout du nom — `OVERLAY_DISPLAY=274QF`, insensible à la casse. **C'est le
+  plus sûr** : un numéro change si Windows réordonne tes écrans, un nom non.
+  Prends un fragment qui ne désigne qu'un seul écran (`274Q` correspondrait aussi
+  bien à `MAG 274Q X24` qu'à `MAG 274QF X24`).
+
+Si la valeur ne correspond à aucun écran, l'application ne reste pas muette :
+elle prévient dans la console, liste les écrans disponibles et retombe sur le
+principal.
+
+**En cours de soirée**, le sous-menu **Afficher sur** de l'icône déplace
+l'overlay tout de suite, sans redémarrer. Ce choix vaut pour la session ;
+`OVERLAY_DISPLAY` est ce qui décide au prochain lancement.
+
+Un écran débranché en cours de route ne casse rien : l'overlay revient sur le
+réglage de `.env`.
 
 ---
 
@@ -128,6 +162,7 @@ n'est rejouable. C'est le principe d'un overlay.
 | `DISCORD_TOKEN` | — | Token du bot. Requis. |
 | `DISCORD_CLIENT_ID` | — | Application ID. Requis pour `npm run deploy`. |
 | `DISCORD_GUILD_ID` | — | Facultatif. Enregistrement instantané de la commande sur ce serveur. |
+| `OVERLAY_DISPLAY` | `principal` | Écran d'affichage : `principal`, un numéro, ou un bout du nom. |
 | `OVERLAY_DURATION_MS` | `8000` | Temps d'affichage d'un meme. |
 | `OVERLAY_GAP_MS` | `500` | Respiration entre deux memes. |
 | `OVERLAY_VOLUME` | `0.7` | Volume des vidéos, de 0 à 1. |
@@ -166,8 +201,14 @@ le bot n'y a pas accès.
 `DISCORD_GUILD_ID` est vide et la commande globale n'est pas encore propagée.
 
 **Le bot répond mais rien ne s'affiche** — regarde la console : chaque meme
-accepté y est logué. Si la ligne apparaît, c'est l'affichage : jeu en plein écran
-exclusif (voir plus haut), ou file en pause (`Ctrl+Alt+P` pour reprendre).
+accepté y est logué. Si la ligne apparaît, c'est l'affichage : le meme part sur
+un autre écran (voir « Choisir l'écran »), jeu en plein écran exclusif (voir plus
+haut), ou file en pause (`Ctrl+Alt+P` pour reprendre).
+
+**Les memes tombent sur le mauvais écran** — la console dit au démarrage lequel
+est choisi, avec la liste numérotée. Si `OVERLAY_DISPLAY` est un numéro et que tu
+as rebranché tes écrans, la numérotation a pu changer : passe à un bout du nom de
+l'écran, qui ne bouge pas.
 
 **`Le mur tourne déjà`** — une instance précédente n'a pas été fermée. Son icône
 est dans la barre des tâches ; quitte-la depuis là.
