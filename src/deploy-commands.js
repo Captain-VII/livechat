@@ -21,6 +21,10 @@ const meme = new SlashCommandBuilder()
     option.setName('lien').setDescription('URL directe vers une image ou une video'),
   );
 
+const passer = new SlashCommandBuilder()
+  .setName('passer')
+  .setDescription('Passe le meme actuellement affiche sur le mur');
+
 const rest = new REST().setToken(DISCORD_TOKEN);
 
 const route = DISCORD_GUILD_ID
@@ -28,11 +32,11 @@ const route = DISCORD_GUILD_ID
   : Routes.applicationCommands(DISCORD_CLIENT_ID);
 
 try {
-  await rest.put(route, { body: [meme.toJSON()] });
+  await rest.put(route, { body: [meme.toJSON(), passer.toJSON()] });
   console.log(
     DISCORD_GUILD_ID
-      ? `/meme enregistree sur le serveur ${DISCORD_GUILD_ID} : disponible tout de suite.`
-      : '/meme enregistree globalement : compte jusqu\'a une heure de propagation.',
+      ? `/meme et /passer enregistrees sur le serveur ${DISCORD_GUILD_ID} : disponibles tout de suite.`
+      : '/meme et /passer enregistrees globalement : comptez jusqu\'a une heure de propagation.',
   );
 } catch (error) {
   console.error('Enregistrement impossible :', error);

@@ -232,7 +232,9 @@
         if (meme.mediaType === 'video') {
           const video = document.createElement('video');
           video.src = meme.mediaUrl;
-          video.loop = true;
+          // Le serveur envoie desormais la duree reelle de la video (meme.duree) :
+          // plus besoin de boucler, elle se termine d'elle-meme au bon moment.
+          video.loop = false;
           video.playsInline = true;
           video.volume = meme.volume ?? 0;
           video.muted = !meme.volume;

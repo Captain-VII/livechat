@@ -8,6 +8,7 @@ import {
   Menu,
   Tray,
   app,
+  globalShortcut,
   ipcMain,
   nativeImage,
   screen,
@@ -146,6 +147,12 @@ function connecter() {
 
 function estConnecte() {
   return socket?.readyState === WebSocket.OPEN;
+}
+
+/** Demande au serveur de passer le meme actuellement affiche, pour tout le monde. */
+function demanderPasser() {
+  if (!estConnecte()) return;
+  socket.send(JSON.stringify({ type: 'passer' }));
 }
 
 /** Change de serveur a chaud : ferme la connexion actuelle, la nouvelle prend le relai. */
@@ -417,6 +424,12 @@ function majMenu() {
     Menu.buildFromTemplate([
       { label: `Le mur — ${etatConnexion}`, enabled: false },
       { type: 'separator' },
+      {
+        label: 'Passer ce meme  (Ctrl+Alt+M)',
+        click: demanderPasser,
+        enabled: estConnecte(),
+      },
+      { type: 'separator' },
       { label: 'Configurer le serveur...', click: ouvrirConfig },
       { label: sonCoupe ? 'Retablir le son' : 'Couper le son', click: basculerSon },
       {
@@ -484,6 +497,8 @@ if (!app.requestSingleInstanceLock()) {
     creerFenetre();
     creerTray();
 
+    globalShortcut.register('Control+Alt+M', demanderPasser);
+
     screen.on('display-added', surChangementEcrans);
     screen.on('display-removed', surChangementEcrans);
     screen.on('display-metrics-changed', surChangementEcrans);
@@ -501,6 +516,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
   socket?.close();
 });
 

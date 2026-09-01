@@ -39,6 +39,11 @@ const FILE_MAX = reglage('QUEUE_MAX', 40, { min: 1 });
 // Combien de temps on laisse a Discord pour resoudre l'embed d'un lien.
 const ATTENTE_EMBED_MS = reglage('EMBED_WAIT_MS', 6000, { min: 500 });
 
+// Une video joue sa duree reelle plutot qu'un temps fixe : un clip de 3s ne
+// traine pas 8s, un clip de 20s n'est pas coupe au milieu. Ce plafond evite
+// qu'un film entier ne monopolise le mur.
+const DUREE_VIDEO_MAX_MS = reglage('OVERLAY_VIDEO_MAX_MS', 60000, { min: 1000 });
+
 // 'cloudflare' : un tunnel s'ouvre tout seul au demarrage et son adresse est
 // postee dans Discord. 'none' : rien d'automatique, expose le port toi-meme.
 const MODE_TUNNEL = (process.env.AUTO_TUNNEL ?? 'cloudflare').trim().toLowerCase();
@@ -109,12 +114,16 @@ function enfiler(meme) {
 }
 
 /** Reveille la file si elle dort. */
+// Vrai pendant qu'on attend la duree reelle d'une video : relancer() ne doit
+// pas programmer un second defiler() en parallele pendant ce temps-la.
+let sondageEnCours = false;
+
 function relancer() {
-  if (minuteur || enPause || file.length === 0) return;
+  if (minuteur || sondageEnCours || enPause || file.length === 0) return;
   minuteur = setTimeout(defiler, 0);
 }
 
-function defiler() {
+async function defiler() {
   minuteur = null;
   if (enPause) return;
 
@@ -125,18 +134,24 @@ function defiler() {
     return;
   }
 
+  sondageEnCours = true;
+  const duree = meme.mediaType === 'video' ? ((await dureeVideoMs(meme.mediaUrl)) ?? DUREE_MS) : DUREE_MS;
+  sondageEnCours = false;
+
   const feuille = {
     id: nextId++,
     // Une legere rotation, decidee ici pour que tous les overlays soient d'accord.
     rotation: Math.round((Math.random() * 4 - 2) * 100) / 100,
-    duree: DUREE_MS,
+    duree,
     ...meme,
   };
 
-  enCours = { meme: feuille, finPrevue: Date.now() + DUREE_MS };
+  enCours = { meme: feuille, finPrevue: Date.now() + duree };
   diffuser({ type: 'meme', meme: feuille });
-  console.log(`[mur] ${feuille.author.name} -> ${feuille.mediaUrl ?? feuille.text ?? ''}`);
-  minuteur = setTimeout(defiler, DUREE_MS + GAP_MS);
+  console.log(
+    `[mur] ${feuille.author.name} -> ${feuille.mediaUrl ?? feuille.text ?? ''} (${duree}ms)`,
+  );
+  minuteur = setTimeout(defiler, duree + GAP_MS);
 }
 
 function passer() {
@@ -206,6 +221,59 @@ function mediaDesEmbeds(embeds) {
   return null;
 }
 
+// --------------------------------------------------------------------------
+// Duree reelle d'une video : lue dans son conteneur MP4, sans FFmpeg. La boite
+// 'mvhd' contient l'echelle de temps et la duree ; on la cherche d'abord dans
+// les premiers octets du fichier (encodage "streaming"), sinon dans les
+// derniers (encodage classique, ou la table des index arrive a la fin).
+// --------------------------------------------------------------------------
+
+const TAILLE_SONDE_OCTETS = 262144; // 256 Ko : large marge, petite requete.
+
+async function plageOctets(url, range) {
+  const reponse = await fetch(url, { headers: { Range: range }, signal: AbortSignal.timeout(4000) });
+  if (!reponse.ok && reponse.status !== 206) throw new Error(`HTTP ${reponse.status}`);
+  return Buffer.from(await reponse.arrayBuffer());
+}
+
+/** Cherche la boite 'mvhd' dans un extrait de fichier et en tire la duree en secondes. */
+function dureeDepuisMvhd(buf) {
+  const idx = buf.indexOf('mvhd');
+  if (idx === -1) return null;
+  try {
+    const version = buf[idx + 4];
+    if (version === 1) {
+      const timescale = buf.readUInt32BE(idx + 24);
+      const duration = Number(buf.readBigUInt64BE(idx + 28));
+      return timescale > 0 ? duration / timescale : null;
+    }
+    const timescale = buf.readUInt32BE(idx + 16);
+    const duration = buf.readUInt32BE(idx + 20);
+    return timescale > 0 ? duration / timescale : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Duree d'une video en millisecondes, ou null si elle n'a pas pu etre lue (webm, erreur reseau, format inattendu). */
+async function dureeVideoMs(url) {
+  try {
+    const debut = await plageOctets(url, `bytes=0-${TAILLE_SONDE_OCTETS - 1}`);
+    let secondes = dureeDepuisMvhd(debut);
+
+    if (secondes == null) {
+      const fin = await plageOctets(url, `bytes=-${TAILLE_SONDE_OCTETS}`);
+      secondes = dureeDepuisMvhd(fin);
+    }
+
+    if (secondes == null || !Number.isFinite(secondes) || secondes <= 0) return null;
+    return Math.min(Math.round(secondes * 1000), DUREE_VIDEO_MAX_MS);
+  } catch (erreur) {
+    console.warn(`[mur] Duree de la video illisible (${erreur.message}), duree par defaut utilisee.`);
+    return null;
+  }
+}
+
 function authorOf(user, member) {
   // member peut arriver brut de l'API (pas un GuildMember) : on retombe sur user.
   const isGuildMember = typeof member?.displayAvatarURL === 'function';
@@ -260,6 +328,20 @@ wss.on('connection', (socket, requete) => {
 
   socket.on('close', () => {
     console.log(`[mur] Overlay deconnecte. ${wss.clients.size} restant(s).`);
+  });
+
+  // Seul message qu'un client envoie : la demande de passer le meme affiche.
+  socket.on('message', (donnees) => {
+    let message;
+    try {
+      message = JSON.parse(donnees);
+    } catch {
+      return;
+    }
+    if (message?.type === 'passer') {
+      console.log(`[mur] Passer demande depuis l'overlay (${adresse}).`);
+      passer();
+    }
   });
 });
 
@@ -415,7 +497,19 @@ client.once(Events.ClientReady, (ready) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand() || interaction.commandName !== 'meme') return;
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === 'passer') {
+    const yAvaitQuelqueChose = enCours !== null;
+    passer();
+    await interaction.reply({
+      content: yAvaitQuelqueChose ? 'Meme passe.' : "Rien n'etait a l'ecran.",
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  if (interaction.commandName !== 'meme') return;
 
   const fichier = interaction.options.getAttachment('fichier');
   const texte = interaction.options.getString('texte');

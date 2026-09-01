@@ -254,13 +254,32 @@ concerne que les vraies vidéos.
 ## Le rythme
 
 **Un meme à la fois**, sur tous les overlays connectés en même temps. Chacun a
-l'écran pour lui pendant `OVERLAY_DURATION_MS`, les autres attendent leur tour.
-Une rafale de huit images ne repeint pas l'écran d'un bloc : ça défile. Le bot
-répond `Dans la file, 3 devant toi.` quand ça bouchonne, et au-delà de
-`QUEUE_MAX` memes en attente, les plus vieux sont abandonnés — sinon un
-plaisantin condamne la soirée à regarder son dossier d'images pendant dix
-minutes. C'est le serveur qui tient l'horloge : le rythme est identique pour
-tout le monde, quel que soit le nombre de clients connectés.
+l'écran pour lui, les autres attendent leur tour. Une rafale de huit images ne
+repeint pas l'écran d'un bloc : ça défile. Le bot répond
+`Dans la file, 3 devant toi.` quand ça bouchonne, et au-delà de `QUEUE_MAX`
+memes en attente, les plus vieux sont abandonnés — sinon un plaisantin condamne
+la soirée à regarder son dossier d'images pendant dix minutes. C'est le serveur
+qui tient l'horloge : le rythme est identique pour tout le monde, quel que soit
+le nombre de clients connectés.
+
+**Les images et les textes** restent affichés `OVERLAY_DURATION_MS` (8 s par
+défaut). **Les vidéos jouent leur durée réelle** : un clip de 3 s ne traîne pas
+inutilement, un clip de 20 s n'est pas coupé au milieu. C'est lu directement
+dans le fichier (la boîte `mvhd` d'un MP4, sans FFmpeg), plafonné à
+`OVERLAY_VIDEO_MAX_MS` (60 s par défaut) pour qu'un pote ne puisse pas
+monopoliser le mur avec un film entier. Si la durée ne peut pas être lue (une
+poignée de formats particuliers, ou un souci réseau passager), la vidéo retombe
+sur `OVERLAY_DURATION_MS` comme avant.
+
+**Couper un meme trop long** : deux façons, équivalentes.
+
+- Depuis l'appli — l'icône de la barre des tâches, **Passer ce meme**, ou le
+  raccourci `Ctrl+Alt+M`. Marche pour n'importe qui a l'overlay ouvert.
+- Depuis Discord — la commande `/passer`, utilisable par tout le monde dans le
+  salon.
+
+Les deux font la même chose : le meme s'efface tout de suite, sur tous les
+écrans connectés, et le suivant dans la file prend le relais.
 
 **En cas d'accroc réseau** (tunnel qui tousse, wifi qui coupe une seconde), un
 client qui se reconnecte pendant qu'un meme est à l'écran le rattrape aussitôt,
@@ -307,6 +326,7 @@ le micro.
 | `OVERLAY_GAP_MS` | `500` | Respiration entre deux memes. |
 | `QUEUE_MAX` | `40` | Taille max de la file d'attente. |
 | `EMBED_WAIT_MS` | `6000` | Délai laissé à Discord pour résoudre le lien d'un GIF. |
+| `OVERLAY_VIDEO_MAX_MS` | `60000` | Durée maximale d'une vidéo, même si elle dure plus longtemps. |
 
 ### Client (par machine qui affiche l'overlay)
 
