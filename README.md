@@ -2,7 +2,7 @@
 
 Les memes de la bande, en direct, **par-dessus l'écran de chacun**. Quelqu'un
 balance une image sur Discord, elle s'affiche en grand au milieu de l'écran de
-chacun de ceux qui ont l'overlay ouvert, huit secondes, puis disparaît. Pas
+chacun de ceux qui ont l'overlay ouvert, cinq secondes, puis disparaît. Pas
 d'OBS, pas de FFmpeg, pas de compte à créer côté joueurs.
 
 ## Deux morceaux
@@ -329,7 +329,7 @@ la soirée à regarder son dossier d'images pendant dix minutes. C'est le serveu
 qui tient l'horloge : le rythme est identique pour tout le monde, quel que soit
 le nombre de clients connectés.
 
-**Les images et les textes** restent affichés `OVERLAY_DURATION_MS` (8 s par
+**Les images et les textes** restent affichés `OVERLAY_DURATION_MS` (5 s par
 défaut). **Les vidéos jouent leur durée réelle** : un clip de 3 s ne traîne pas
 inutilement, un clip de 20 s n'est pas coupé au milieu. C'est lu directement
 dans le fichier (la boîte `mvhd` d'un MP4, sans FFmpeg), plafonné à
@@ -338,14 +338,18 @@ monopoliser LiveChat avec un film entier. Si la durée ne peut pas être lue (un
 poignée de formats particuliers, ou un souci réseau passager), la vidéo retombe
 sur `OVERLAY_DURATION_MS` comme avant.
 
-**Couper un meme trop long** : deux façons, équivalentes.
+**Couper un meme trop long** : quatre façons, équivalentes.
 
+- Le bouton **⏭** directement sur l'overlay, en haut à droite du meme affiché —
+  survole-le puis clique, sans quitter le jeu.
+- Le bouton **Passer** posté par le bot sous le message qui annonce le meme en
+  cours dans `#livechat`, utilisable par tout le monde.
 - Depuis l'appli — l'icône de la barre des tâches, **Passer ce meme**, ou le
   raccourci `Ctrl+Alt+M`. Marche pour n'importe qui a l'overlay ouvert.
 - Depuis Discord — la commande `/passer`, utilisable par tout le monde dans le
   salon.
 
-Les deux font la même chose : le meme s'efface tout de suite, sur tous les
+Toutes font la même chose : le meme s'efface tout de suite, sur tous les
 écrans connectés, et le suivant dans la file prend le relais.
 
 **En cas d'accroc réseau** (tunnel qui tousse, wifi qui coupe une seconde), un
@@ -451,7 +455,7 @@ pointer.
 | `DISCORD_CLIENT_ID` | — | Application ID. Requis pour `npm run deploy`. |
 | `DISCORD_GUILD_ID` | — | Facultatif. Enregistrement instantané de la commande sur ce serveur. |
 | `PORT` | `8787` | Port d'écoute, celui que le tunnel expose. |
-| `OVERLAY_DURATION_MS` | `8000` | Temps d'affichage d'un meme. |
+| `OVERLAY_DURATION_MS` | `5000` | Temps d'affichage d'un meme. |
 | `OVERLAY_GAP_MS` | `500` | Respiration entre deux memes. |
 | `QUEUE_MAX` | `40` | Taille max de la file d'attente. |
 | `EMBED_WAIT_MS` | `6000` | Délai laissé à Discord pour résoudre le lien d'un GIF. |
