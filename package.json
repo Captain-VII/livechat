@@ -1,6 +1,6 @@
 {
   "name": "livechat",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Un overlay de memes en direct, alimente depuis Discord, partageable entre plusieurs ecrans.",
   "type": "module",
   "private": true,
