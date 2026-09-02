@@ -391,6 +391,16 @@ let dejaAnnonce = false;
 let processusTunnel = null;
 
 function demarrerTunnel() {
+  // Adresse fixe (VPS, domaine derriere nginx...) : pas de tunnel a ouvrir,
+  // mais l'annonce automatique dans Discord reste utile telle quelle.
+  const adressePublique = (process.env.PUBLIC_URL ?? '').trim();
+  if (adressePublique) {
+    urlPublique = adressePublique;
+    console.log(`[tunnel] Adresse publique fixe : ${urlPublique}`);
+    annoncerSiPret();
+    return;
+  }
+
   if (MODE_TUNNEL === 'none' || MODE_TUNNEL === 'non') {
     console.log("[tunnel] AUTO_TUNNEL=none : lance le tien a la main si besoin.");
     return;

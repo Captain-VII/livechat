@@ -150,7 +150,8 @@ valide à la fois.
 
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
-| `AUTO_TUNNEL` | `cloudflare` | `cloudflare` pour le tunnel automatique, `none` pour le désactiver. |
+| `AUTO_TUNNEL` | `cloudflare` | `cloudflare` pour le tunnel automatique, `none` pour le désactiver. Ignoré si `PUBLIC_URL` est rempli. |
+| `PUBLIC_URL` | — | Adresse fixe (VPS, domaine…) : si remplie, pas de tunnel, cette adresse est annoncée telle quelle. |
 | `ANNOUNCE_CHANNEL` | — | Salon où poster l'adresse. Vide : le même que `#livechat`. |
 
 Si `cloudflared` n'est pas installé, le serveur le signale clairement dans sa
@@ -196,9 +197,12 @@ Grandes lignes (fichiers de départ dans [`deploy/`](deploy/)) :
    par ex. `livechat.tondomaine.fr` (enregistrement DNS de type A vers l'IP
    du VPS).
 2. **Node et le dépôt** : installe Node 18+ sur le VPS, clone ce dépôt dans
-   `/opt/livechat`, copie ton `.env` (avec `AUTO_TUNNEL=none` — plus besoin de
-   tunnel, nginx s'en charge), puis `npm install --omit=dev` (`--omit=dev`
-   évite de télécharger Electron, inutile côté serveur).
+   `/opt/livechat`, copie ton `.env` avec **`PUBLIC_URL`** rempli (l'adresse
+   fixe — `wss://livechat.tondomaine.fr` avec nginx+domaine, ou directement
+   `ws://IP:8787` en attendant — plus besoin de tunnel, et l'adresse est quand
+   même annoncée une fois dans Discord au démarrage), puis
+   `npm install --omit=dev` (`--omit=dev` évite de télécharger Electron,
+   inutile côté serveur).
 3. **nginx + certbot** : [`deploy/nginx-livechat.conf`](deploy/nginx-livechat.conf)
    fait le relais HTTPS vers le port local du serveur (`8787` par défaut) —
    c'est lui qui expose le port 443, jamais le serveur Node directement.
