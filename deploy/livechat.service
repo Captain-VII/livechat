@@ -1,0 +1,15 @@
+[Unit]
+Description=LiveChat - bot Discord et file de memes
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=livechat
+WorkingDirectory=/opt/livechat
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

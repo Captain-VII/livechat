@@ -178,7 +178,43 @@ main dans Discord ou directement à tes potes.
 **Limite à connaître, dans tous les cas** : si ton PC s'éteint ou perd le
 réseau, l'overlay de tout le monde s'arrête — c'est ta machine qui fait tourner
 le bot. Pour une soirée où tu es de toute façon devant ton PC, ce n'est en
-général pas un problème.
+général pas un problème. Pour que LiveChat tourne en continu, indépendamment
+de ton PC, voir la section suivante.
+
+### Aller plus loin : héberger sur un VPS (serveur toujours allumé)
+
+Tout ce qui précède suppose que le serveur tourne sur ta machine, allumée
+pendant que vos potes jouent. Un petit VPS (OVH, Scaleway, Hetzner…) enlève
+cette contrainte : le bot et la file de memes tournent en continu, avec une
+**adresse fixe** qui ne change plus jamais — plus de tunnel, plus d'adresse à
+reposter dans Discord à chaque démarrage.
+
+Grandes lignes (fichiers de départ dans [`deploy/`](deploy/)) :
+
+1. **VPS + domaine** : le plus petit VPS Node-compatible suffit (LiveChat est
+   très léger, il n'affiche rien lui-même). Pointe un sous-domaine dessus,
+   par ex. `livechat.tondomaine.fr` (enregistrement DNS de type A vers l'IP
+   du VPS).
+2. **Node et le dépôt** : installe Node 18+ sur le VPS, clone ce dépôt dans
+   `/opt/livechat`, copie ton `.env` (avec `AUTO_TUNNEL=none` — plus besoin de
+   tunnel, nginx s'en charge), puis `npm install --omit=dev` (`--omit=dev`
+   évite de télécharger Electron, inutile côté serveur).
+3. **nginx + certbot** : [`deploy/nginx-livechat.conf`](deploy/nginx-livechat.conf)
+   fait le relais HTTPS vers le port local du serveur (`8787` par défaut) —
+   c'est lui qui expose le port 443, jamais le serveur Node directement.
+   Génère le certificat avec `certbot certonly --nginx -d livechat.tondomaine.fr`
+   avant d'activer le bloc HTTPS du fichier.
+4. **systemd** : [`deploy/livechat.service`](deploy/livechat.service) garde le
+   serveur en vie (redémarrage automatique en cas de plantage, démarrage au
+   boot du VPS). Copie-le dans `/etc/systemd/system/`, puis
+   `systemctl enable --now livechat`.
+5. **Mises à jour** : [`deploy/update.sh`](deploy/update.sh) fait `git pull` +
+   `npm install` + redémarre le service en une commande.
+
+Une fois en place, l'adresse à donner à tes potes (et dans `SERVER_URL` côté
+client) devient `wss://livechat.tondomaine.fr` — fixe, à ne plus jamais
+retaper. `DISCORD_TOKEN` vit alors sur le VPS plutôt que sur ta machine : à
+traiter avec les mêmes précautions (fichier `.env`, jamais commité).
 
 ---
 
