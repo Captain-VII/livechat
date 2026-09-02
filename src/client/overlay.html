@@ -42,10 +42,17 @@
     max-width: 80vw;
   }
 
+  /* Le media et son eventuel sous-titre : un bloc positionne, qui se
+     dimensionne exactement sur le media qu'il contient. */
+  .media {
+    position: relative;
+    display: inline-block;
+  }
+
   /* La taille reelle est calculee en JS : un meme doit remplir l'ecran, pas
      rester a sa taille native. Ces bornes ne sont qu'un filet de securite. */
-  .contenu img,
-  .contenu video {
+  .media img,
+  .media video {
     display: block;
     max-width: 72vw;
     max-height: 78vh;
@@ -65,6 +72,18 @@
     color: #fff;
     text-shadow: 0 6px 24px rgba(0, 0, 0, .85), 0 1px 4px rgba(0, 0, 0, .9);
     overflow-wrap: anywhere;
+  }
+
+  /* Quand il y a un media, le texte devient un sous-titre incruste dessus,
+     plutot qu'une legende sous la feuille. */
+  .media .legende {
+    position: absolute;
+    left: 50%;
+    bottom: 4%;
+    transform: translateX(-50%);
+    width: 88%;
+    max-width: none;
+    margin: 0;
   }
 
   /* Le badge auteur : ancre dans le coin de l'ecran, independant du centrage
@@ -186,7 +205,14 @@
       const el = document.createElement('div');
       el.className = 'contenu';
 
+      // Avec un media, le texte devient un sous-titre incruste dessus (voir
+      // .media .legende) : il est ajoute dans .media, pas dans .contenu.
+      let media = null;
+
       if (meme.mediaUrl) {
+        media = document.createElement('div');
+        media.className = 'media';
+
         if (meme.mediaType === 'video') {
           const video = document.createElement('video');
           video.src = meme.mediaUrl;
@@ -205,7 +231,7 @@
           video.play().catch((erreur) => {
             console.error('[overlay] lecture video refusee :', erreur.name, erreur.message);
           });
-          el.appendChild(video);
+          media.appendChild(video);
         } else {
           const img = document.createElement('img');
           img.src = meme.mediaUrl;
@@ -214,32 +240,42 @@
             dimensionner(img, img.naturalWidth, img.naturalHeight);
           });
           // Lien mort : le texte devient l'affiche plutot qu'un cadre vide.
+          // Le sous-titre (s'il existe deja dans .media) revient alors dans
+          // .contenu, en legende autonome agrandie.
           img.addEventListener('error', () => {
             console.warn('[overlay] image introuvable :', meme.mediaUrl);
-            img.remove();
-            const legende = el.querySelector('.legende');
-            if (legende) {
-              legende.style.fontSize = tailleTexte(legende.textContent.length);
+            const sousTitre = media.querySelector('.legende');
+            media.remove();
+            if (sousTitre) {
+              sousTitre.style.fontSize = tailleTexte(sousTitre.textContent.length);
+              el.appendChild(sousTitre);
             } else {
               const rate = document.createElement('p');
               rate.className = 'legende';
               rate.textContent = 'image introuvable';
               rate.style.fontSize = tailleTexte(rate.textContent.length);
-              el.prepend(rate);
+              el.appendChild(rate);
             }
           });
-          el.appendChild(img);
+          media.appendChild(img);
         }
+
+        el.appendChild(media);
       }
 
       if (meme.text) {
         const p = document.createElement('p');
         p.className = 'legende';
         p.textContent = meme.text;
-        // Sur une affiche sans image, le texte porte tout : plus il est court,
-        // plus il est gros.
-        if (!meme.mediaUrl) p.style.fontSize = tailleTexte(meme.text.length);
-        el.appendChild(p);
+        if (media) {
+          // Sous-titre incruste sur le media.
+          media.appendChild(p);
+        } else {
+          // Sur une affiche sans image, le texte porte tout : plus il est
+          // court, plus il est gros.
+          p.style.fontSize = tailleTexte(meme.text.length);
+          el.appendChild(p);
+        }
       }
 
       return el;
