@@ -8,12 +8,6 @@
       content="default-src 'none'; img-src https: data:; media-src https: data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>LiveChat</title>
 <style>
-  :root {
-    --papier: #f3efe4;
-    --encre: #1b1917;
-    --scotch: rgba(226, 214, 176, 0.6);
-  }
-
   * { box-sizing: border-box; }
 
   html, body {
@@ -37,118 +31,83 @@
     justify-content: center;
   }
 
-  .feuille {
-    --rot: 0deg;
-    max-width: 68vw;
-    padding: 18px 18px 14px;
-    background: var(--papier);
-    color: var(--encre);
-    transform: rotate(var(--rot));
-    /* Une ombre franche : la feuille doit se detacher de n'importe quel fond. */
-    box-shadow: 0 28px 60px rgba(0, 0, 0, .65), 0 4px 10px rgba(0, 0, 0, .5);
-    position: relative;
-  }
-
-  /* le bout de scotch */
-  .feuille::before {
-    content: "";
-    position: absolute;
-    top: -16px;
-    left: 50%;
-    width: 156px;
-    height: 38px;
-    transform: translateX(-50%) rotate(-2.5deg);
-    background: var(--scotch);
-    border-left: 1px solid rgba(255, 255, 255, .35);
-    border-right: 1px solid rgba(255, 255, 255, .35);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  /* Plus de cadre : le media et le texte flottent directement sur le bureau.
+     Une ombre portee (et non une box-shadow de carte) fait le travail de
+     detachement du fond, en epousant la silhouette reelle du media. */
+  .contenu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+    max-width: 80vw;
   }
 
   /* La taille reelle est calculee en JS : un meme doit remplir l'ecran, pas
      rester a sa taille native. Ces bornes ne sont qu'un filet de securite. */
-  .feuille img,
-  .feuille video {
+  .contenu img,
+  .contenu video {
     display: block;
-    max-width: 62vw;
-    max-height: 72vh;
+    max-width: 72vw;
+    max-height: 78vh;
     width: auto;
     height: auto;
-    background: #ddd7c8;
+    filter:
+      drop-shadow(0 30px 55px rgba(0, 0, 0, .6))
+      drop-shadow(0 6px 16px rgba(0, 0, 0, .55));
   }
 
   .legende {
-    margin: 14px 4px 4px;
-    max-width: 62vw;
-    font-size: 1.4rem;
-    line-height: 1.45;
+    max-width: 70vw;
+    font-size: 2.2rem;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: center;
+    color: #fff;
+    text-shadow: 0 6px 24px rgba(0, 0, 0, .85), 0 1px 4px rgba(0, 0, 0, .9);
     overflow-wrap: anywhere;
   }
 
-  /* Un meme sans image : c'est le texte qui devient l'affiche. Largeur et
-     hauteur imposees, sinon une phrase courte se reduit a un bandeau. */
-  .feuille.texte {
-    width: 46vw;
-    max-width: 46vw;
-    min-height: 34vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-
-  .feuille.texte .legende {
-    flex: 1;
+  /* Le badge auteur : ancre dans le coin de l'ecran, independant du centrage
+     du contenu (position:fixed le sort du flux flex de #scene). */
+  .badge-auteur {
+    position: fixed;
+    top: 44px;
+    left: 44px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    margin: 0 24px;
-    padding: 28px 0;
-    max-width: none;
-    font-weight: 700;
-    text-align: center;
-    line-height: 1.25;
+    gap: 16px;
   }
 
-  .feuille.texte .signature {
-    margin-top: 0;
-  }
-
-  .signature {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 14px;
-    padding-top: 10px;
-    border-top: 1px dashed rgba(0, 0, 0, .18);
-    font-size: 1rem;
-    color: #5d564c;
-  }
-
-  .signature img {
-    width: 28px;
-    height: 28px;
+  .badge-auteur img {
+    width: 72px;
+    height: 72px;
     border-radius: 50%;
-    background: #cfc7b5;
+    background: rgba(255, 255, 255, .15);
+    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, .65));
   }
 
-  .signature .pseudo {
+  .badge-auteur .pseudo {
+    font-size: 1.6rem;
     font-weight: 700;
-    color: #3a352e;
+    color: #fff;
+    text-shadow: 0 4px 18px rgba(0, 0, 0, .85), 0 1px 4px rgba(0, 0, 0, .9);
   }
 
-  /* La seule animation : le meme se colle a l'ecran. Il entre legerement trop
-     grand et se stabilise d'un coup sec. Rien d'autre ne bouge, et il s'efface
-     sans fondu quand son temps est ecoule. */
-  @keyframes coller {
-    from { transform: rotate(var(--rot)) scale(1.07); }
-    to   { transform: rotate(var(--rot)) scale(1); }
+  /* La seule animation : une apparition nette, sans rotation ni fondu long —
+     le meme et le badge auteur entrent legerement trop grands et se
+     stabilisent d'un coup sec. */
+  @keyframes apparaitre {
+    from { opacity: 0; transform: scale(1.06); }
+    to   { opacity: 1; transform: scale(1); }
   }
 
-  .feuille {
-    animation: coller 300ms cubic-bezier(.15, .85, .25, 1) both;
+  .contenu,
+  .badge-auteur {
+    animation: apparaitre 300ms cubic-bezier(.15, .85, .25, 1) both;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .feuille { animation: none; }
+    .contenu, .badge-auteur { animation: none; }
   }
 </style>
 </head>
@@ -211,10 +170,10 @@
     }
 
     function tailleTexte(longueur) {
-      if (longueur <= 24) return '6rem';
-      if (longueur <= 60) return '4.2rem';
-      if (longueur <= 140) return '2.8rem';
-      return '2rem';
+      if (longueur <= 24) return '7.5rem';
+      if (longueur <= 60) return '5.5rem';
+      if (longueur <= 140) return '3.6rem';
+      return '2.6rem';
     }
 
     function retirer() {
@@ -223,10 +182,9 @@
       scene.replaceChildren();
     }
 
-    function feuille(meme) {
-      const el = document.createElement('article');
-      el.className = 'feuille' + (meme.mediaUrl ? '' : ' texte');
-      el.style.setProperty('--rot', (meme.rotation ?? 0) + 'deg');
+    function contenu(meme) {
+      const el = document.createElement('div');
+      el.className = 'contenu';
 
       if (meme.mediaUrl) {
         if (meme.mediaType === 'video') {
@@ -255,11 +213,10 @@
           img.addEventListener('load', () => {
             dimensionner(img, img.naturalWidth, img.naturalHeight);
           });
-          // Lien mort : la feuille devient une affiche plutot qu'un cadre vide.
+          // Lien mort : le texte devient l'affiche plutot qu'un cadre vide.
           img.addEventListener('error', () => {
             console.warn('[overlay] image introuvable :', meme.mediaUrl);
             img.remove();
-            el.classList.add('texte');
             const legende = el.querySelector('.legende');
             if (legende) {
               legende.style.fontSize = tailleTexte(legende.textContent.length);
@@ -285,19 +242,25 @@
         el.appendChild(p);
       }
 
-      const signature = document.createElement('div');
-      signature.className = 'signature';
+      return el;
+    }
+
+    /** Le badge auteur : ancre dans le coin de l'ecran, separement du media. */
+    function badgeAuteur(meme) {
+      const el = document.createElement('div');
+      el.className = 'badge-auteur';
+
       if (meme.author?.avatar) {
         const avatar = document.createElement('img');
         avatar.src = meme.author.avatar;
         avatar.alt = '';
-        signature.appendChild(avatar);
+        el.appendChild(avatar);
       }
+
       const pseudo = document.createElement('span');
       pseudo.className = 'pseudo';
       pseudo.textContent = meme.author?.name ?? 'anonyme';
-      signature.appendChild(pseudo);
-      el.appendChild(signature);
+      el.appendChild(pseudo);
 
       return el;
     }
@@ -305,7 +268,7 @@
     // Un seul meme a l'ecran a la fois : le suivant remplace le precedent.
     window.livechat.surMeme((meme) => {
       clearTimeout(minuteur);
-      scene.replaceChildren(feuille(meme));
+      scene.replaceChildren(contenu(meme), badgeAuteur(meme));
       minuteur = setTimeout(retirer, meme.duree ?? 8000);
     });
 
