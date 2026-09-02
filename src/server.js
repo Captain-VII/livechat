@@ -13,7 +13,7 @@ import {
   Partials,
 } from 'discord.js';
 
-const WALL_CHANNEL = 'mur-a-memes';
+const WALL_CHANNEL = 'livechat';
 
 /** Lit un reglage numerique, en gueulant plutot qu'en avalant une valeur bancale. */
 function reglage(nom, defaut, { min = 0, max = Infinity } = {}) {
@@ -484,13 +484,26 @@ const client = new Client({
   partials: [Partials.Channel],
 });
 
-client.once(Events.ClientReady, (ready) => {
+client.once(Events.ClientReady, async (ready) => {
   console.log(`[bot] Connecte en tant que ${ready.user.tag}`);
   const invite =
     `https://discord.com/api/oauth2/authorize?client_id=${ready.user.id}` +
     '&permissions=68608&scope=bot%20applications.commands';
   console.log(`[bot] Invitation : ${invite}`);
   console.log(`[bot] Salon ecoute automatiquement : #${WALL_CHANNEL}`);
+
+  // Le pseudo du bot ne suit pas le renommage du projet tout seul : on le
+  // met a jour ici, une bonne fois, plutot que de demander un geste manuel
+  // dans le portail Discord a chaque redemarrage (ne fait rien une fois que
+  // c'est deja bon).
+  if (ready.user.username !== 'LiveChat') {
+    try {
+      await ready.user.setUsername('LiveChat');
+      console.log('[bot] Renomme en LiveChat.');
+    } catch (erreur) {
+      console.warn('[bot] Renommage du bot impossible :', erreur.message);
+    }
+  }
 
   botPret = true;
   annoncerSiPret();

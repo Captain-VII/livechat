@@ -69,7 +69,7 @@ serveur. Permissions minimales : voir les salons, lire l'historique, répondre.
 
 ### 2.5 Créer le salon
 
-Crée un salon texte nommé exactement **`mur-a-memes`**. Tout ce qui y est posté
+Crée un salon texte nommé exactement **`livechat`**. Tout ce qui y est posté
 part à l'écran, sans commande.
 
 ### 2.6 Enregistrer la commande slash
@@ -116,7 +116,7 @@ plus redemandée ensuite.
 Ton PC n'est pas visible depuis internet par défaut. Un **tunnel** ouvre un
 passage temporaire, sans configurer ta box, sans compte payant — et depuis la
 v1.1, **le serveur s'en occupe tout seul** : il ouvre le tunnel au démarrage et
-poste l'adresse dans `#mur-a-memes` automatiquement.
+poste l'adresse dans `#livechat` automatiquement.
 
 ### Installer cloudflared (une fois)
 
@@ -129,7 +129,7 @@ C'est tout. Au prochain `npm run server`, le déroulé est :
 1. Le serveur démarre et se connecte à Discord.
 2. Il ouvre un tunnel Cloudflare vers son propre port.
 3. Dès que l'adresse est prête **et** que le bot est connecté, il poste dans
-   `#mur-a-memes` :
+   `#livechat` :
 
    > **LiveChat est en ligne.** Colle cette adresse dans l'appli (icône de la
    > barre des tâches > *Configurer le serveur*) :
@@ -151,7 +151,7 @@ valide à la fois.
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
 | `AUTO_TUNNEL` | `cloudflare` | `cloudflare` pour le tunnel automatique, `none` pour le désactiver. |
-| `ANNOUNCE_CHANNEL` | — | Salon où poster l'adresse. Vide : le même que `#mur-a-memes`. |
+| `ANNOUNCE_CHANNEL` | — | Salon où poster l'adresse. Vide : le même que `#livechat`. |
 
 Si `cloudflared` n'est pas installé, le serveur le signale clairement dans sa
 console et continue de tourner normalement — seule l'annonce automatique
@@ -252,7 +252,7 @@ l'overlay est traversé par les clics — c'est le principe même d'un overlay.
 
 ## Utilisation (côté Discord, inchangée)
 
-**Mode soirée (le principal)** : poste n'importe quoi dans `#mur-a-memes`.
+**Mode soirée (le principal)** : poste n'importe quoi dans `#livechat`.
 Image, vidéo, lien direct, ou juste du texte. Plusieurs pièces jointes dans un
 même message donnent plusieurs passages à l'écran.
 
@@ -427,7 +427,7 @@ src/client/config.html    fenetre de reglage de l'adresse du serveur
 
 **Rien n'apparaît quand je poste dans le salon** — l'intent MESSAGE CONTENT
 n'est pas activé (voir 2.2), ou le salon ne s'appelle pas exactement
-`mur-a-memes`, ou le bot n'y a pas accès.
+`livechat`, ou le bot n'y a pas accès.
 
 **`/meme` n'existe pas dans Discord** — `npm run deploy` n'a pas été lancé, ou
 `DISCORD_GUILD_ID` est vide et la commande globale n'est pas encore propagée.
@@ -449,12 +449,12 @@ d'en relancer une.
 console : `[tunnel] cloudflared introuvable` veut dire qu'il faut l'installer
 (`winget install --id Cloudflare.cloudflared`). `AUTO_TUNNEL=none` dans `.env`
 désactive volontairement l'automatique. Si le tunnel a démarré mais que rien
-n'est posté, vérifie que `#mur-a-memes` (ou `ANNOUNCE_CHANNEL`) existe bien et
+n'est posté, vérifie que `#livechat` (ou `ANNOUNCE_CHANNEL`) existe bien et
 que le bot y a accès.
 
 **`/meme lien:` refuse mon lien de GIF** — l'option `lien` veut une URL qui finit
 par `.jpg`, `.png`, `.gif`, `.webp`, `.mp4` ou `.webm`. Un lien du sélecteur GIF
-n'en est pas un : poste-le directement dans `#mur-a-memes`.
+n'en est pas un : poste-le directement dans `#livechat`.
 
 **Un GIF s'affiche en texte** — le délai d'attente de l'embed a expiré avant que
 Discord réponde. Monte `EMBED_WAIT_MS` côté serveur si la connexion traîne.
