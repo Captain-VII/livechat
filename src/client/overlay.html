@@ -343,7 +343,7 @@
     window.livechat.surMeme((meme) => {
       clearTimeout(minuteur);
       scene.replaceChildren(contenu(meme), badgeAuteur(meme), boutonPasser());
-      minuteur = setTimeout(retirer, meme.duree ?? 8000);
+      minuteur = setTimeout(retirer, meme.duree ?? 5000);
     });
 
     // Le process principal a cache la fenetre : on nettoie derriere lui.

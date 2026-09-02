@@ -35,7 +35,7 @@ const PORT = reglage('PORT', 8787, { min: 1 });
 // Temps d'affichage d'un meme, puis la respiration avant le suivant. C'est le
 // serveur qui tient l'horloge : tous les overlays connectes suivent le meme
 // rythme, quel que soit le nombre de spectateurs.
-const DUREE_MS = reglage('OVERLAY_DURATION_MS', 8000, { min: 500 });
+const DUREE_MS = reglage('OVERLAY_DURATION_MS', 5000, { min: 500 });
 const GAP_MS = reglage('OVERLAY_GAP_MS', 500);
 const FILE_MAX = reglage('QUEUE_MAX', 40, { min: 1 });
 
