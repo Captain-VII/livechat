@@ -314,6 +314,19 @@ avec le temps qu'il lui reste — pas un plein cycle qui le désynchroniserait d
 autres. Le serveur détecte aussi les connexions mortes en ~15 s au lieu de
 compter sur le système d'exploitation, qui peut mettre plusieurs minutes.
 
+## Qui est connecté
+
+La commande `/connectes` liste, depuis Discord, qui a son overlay ouvert en ce
+moment et depuis combien de temps :
+
+> **2 overlay(s) connecté(s) :**
+> • **Dorian** — connecté depuis 12 min
+> • **Alex** — connecté depuis 3 min
+
+Chaque client s'identifie par son pseudo Windows par défaut — rien à
+configurer. `OVERLAY_NAME` (variable du client) permet d'en choisir un autre,
+plus parlant que le nom de session Windows.
+
 ## Choisir l'écran (par client)
 
 Chacun choisit son propre écran, indépendamment des autres. Au démarrage, la
@@ -373,6 +386,12 @@ suivant de l'appli, sans rien demander.
 client — le serveur (`src/server.js`) n'a pas de mécanisme de mise à jour, tu
 le mets à jour toi-même avec `git pull`.
 
+L'icône affiche la version installée (**Version x.y.z**, ligne grisée) et un
+bouton **Vérifier les mises à jour...** pour forcer un contrôle immédiat sans
+attendre le prochain cycle de 6h — utile si tu sais qu'une release vient de
+sortir. Une notification Windows confirme dans tous les cas (déjà à jour,
+mise à jour trouvée, ou vérification impossible).
+
 ## Démarrer avec Windows
 
 L'icône propose une case **Démarrer avec Windows**, qui ajoute (ou retire)
@@ -408,6 +427,7 @@ pointer.
 | `OVERLAY_AUDIO_DEVICE` | `defaut` | Sortie audio : `defaut`, ou un bout du nom du périphérique. |
 | `OVERLAY_AUTO_SWITCH` | `on` | Bascule sur l'autre écran en cas de plein écran exclusif. `off` pour désactiver. |
 | `OVERLAY_AUTO_UPDATE` | `on` | Vérifie les mises à jour tout seul (version installée uniquement). `off` pour désactiver. |
+| `OVERLAY_NAME` | pseudo Windows | Nom affiché par `/connectes` côté Discord. |
 
 Un ami qui lance l'installeur sans `.env` n'a besoin de rien de tout ça : la
 fenêtre au premier lancement et les sous-menus de l'icône suffisent.

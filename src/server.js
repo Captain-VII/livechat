@@ -303,9 +303,24 @@ function diffuser(message) {
   }
 }
 
+/** Tire un pseudo present dans l'URL de connexion (?pseudo=...), sinon 'anonyme'. */
+function pseudoDepuisUrl(url) {
+  try {
+    const brut = new URL(url, 'http://x').searchParams.get('pseudo');
+    const propre = (brut ?? '').trim().slice(0, 32);
+    return propre || 'anonyme';
+  } catch {
+    return 'anonyme';
+  }
+}
+
 wss.on('connection', (socket, requete) => {
   const adresse = requete.socket.remoteAddress;
-  console.log(`[livechat] Overlay connecte (${adresse}). ${wss.clients.size} au total.`);
+  socket.pseudo = pseudoDepuisUrl(requete.url);
+  socket.connecteDepuis = Date.now();
+  console.log(
+    `[livechat] Overlay connecte : ${socket.pseudo} (${adresse}). ${wss.clients.size} au total.`,
+  );
 
   // Rattrapage : qui se connecte (ou se reconnecte apres un accroc reseau)
   // pendant qu'un meme est deja a l'ecran le recoit tout de suite, avec le
@@ -327,7 +342,7 @@ wss.on('connection', (socket, requete) => {
   });
 
   socket.on('close', () => {
-    console.log(`[livechat] Overlay deconnecte. ${wss.clients.size} restant(s).`);
+    console.log(`[livechat] Overlay deconnecte : ${socket.pseudo}. ${wss.clients.size} restant(s).`);
   });
 
   // Seul message qu'un client envoie : la demande de passer le meme affiche.
@@ -509,8 +524,32 @@ client.once(Events.ClientReady, async (ready) => {
   annoncerSiPret();
 });
 
+/** "3 min", "1 h 12 min"... a partir d'une duree en ms. */
+function dureeLisible(ms) {
+  const minutes = Math.max(1, Math.round(ms / 60000));
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === 'connectes') {
+    const maintenant = Date.now();
+    const liste = [...wss.clients]
+      .filter((s) => s.readyState === s.OPEN)
+      .sort((a, b) => a.connecteDepuis - b.connecteDepuis)
+      .map((s) => `• **${s.pseudo}** — connecte depuis ${dureeLisible(maintenant - s.connecteDepuis)}`);
+
+    await interaction.reply({
+      content:
+        liste.length === 0
+          ? "Personne n'a l'overlay ouvert en ce moment."
+          : `**${liste.length} overlay(s) connecte(s) :**\n${liste.join('\n')}`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
 
   if (interaction.commandName === 'passer') {
     const yAvaitQuelqueChose = enCours !== null;

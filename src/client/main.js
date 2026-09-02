@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -55,6 +56,11 @@ const BASCULE_AUTO_ACTIVE = !/^(off|non|false)$/i.test(
 const MAJ_AUTO_ACTIVE = !/^(off|non|false)$/i.test(
   (process.env.OVERLAY_AUTO_UPDATE ?? 'on').trim(),
 );
+
+// Le nom sous lequel ce client apparait dans /connectes cote Discord. Par
+// defaut le pseudo Windows de la session : ca marche sans rien configurer,
+// et OVERLAY_NAME permet d'en mettre un plus parlant.
+const PSEUDO = ((process.env.OVERLAY_NAME ?? '').trim() || os.userInfo().username || 'anonyme').slice(0, 32);
 
 // Une bulle de discussion avec une pastille "live", 32x32 : l'icone de la
 // barre des taches, en dur, pour ne pas trimballer un binaire dans le depot.
@@ -132,8 +138,18 @@ function connecter() {
   majMenu();
   notifierConfig({ type: 'connexion' });
 
+  // Le pseudo part dans l'URL : c'est ce que /connectes cote Discord affiche.
+  let urlAvecPseudo = url;
   try {
-    socket = new WebSocket(url);
+    const u = new URL(url);
+    u.searchParams.set('pseudo', PSEUDO);
+    urlAvecPseudo = u.toString();
+  } catch {
+    // Adresse invalide : tant pis pour le pseudo, l'erreur normale plus bas s'en charge.
+  }
+
+  try {
+    socket = new WebSocket(urlAvecPseudo);
   } catch (erreur) {
     console.error('[livechat] Adresse de serveur invalide :', erreur.message);
     ouvrirConfig();
@@ -675,6 +691,13 @@ function majMenu() {
         click: basculerDemarrageAvecWindows,
       },
       { type: 'separator' },
+      { label: `Version ${app.getVersion()}`, enabled: false },
+      {
+        label: verificationManuelleEnCours ? 'Verification en cours...' : 'Verifier les mises a jour...',
+        enabled: app.isPackaged && !verificationManuelleEnCours,
+        click: verifierMajMaintenant,
+      },
+      { type: 'separator' },
       { label: 'Quitter', click: () => app.quit() },
     ]),
   );
@@ -713,8 +736,13 @@ function basculerDemarrageAvecWindows() {
 // s'appuie sur des fichiers ecrits a cote de l'appli par l'installeur).
 // --------------------------------------------------------------------------
 
+// Vrai uniquement le temps d'une verification demandee a la main depuis le
+// menu : ca evite que les controles silencieux en arriere-plan se mettent a
+// notifier "deja a jour" toutes les 6h sans qu'on ait rien demande.
+let verificationManuelleEnCours = false;
+
 function demarrerVerificationMaj() {
-  if (!MAJ_AUTO_ACTIVE || !app.isPackaged) return;
+  if (!app.isPackaged) return;
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = false;
@@ -722,7 +750,20 @@ function demarrerVerificationMaj() {
   autoUpdater.on('update-available', (info) => {
     console.log(`[maj] Mise a jour ${info.version} disponible, telechargement...`);
   });
+  autoUpdater.on('update-not-available', () => {
+    if (!verificationManuelleEnCours) return;
+    verificationManuelleEnCours = false;
+    console.log('[maj] Deja a jour.');
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'LiveChat',
+        body: `Deja a jour (version ${app.getVersion()}).`,
+        silent: true,
+      }).show();
+    }
+  });
   autoUpdater.on('update-downloaded', (info) => {
+    verificationManuelleEnCours = false;
     console.log(`[maj] Mise a jour ${info.version} prete. Redemarrage dans 15 s.`);
 
     if (Notification.isSupported()) {
@@ -739,15 +780,38 @@ function demarrerVerificationMaj() {
   });
   autoUpdater.on('error', (erreur) => {
     console.warn('[maj] Verification impossible :', erreur.message);
+    if (!verificationManuelleEnCours) return;
+    verificationManuelleEnCours = false;
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'LiveChat',
+        body: `Verification impossible : ${erreur.message}`,
+        silent: true,
+      }).show();
+    }
   });
 
   const verifier = () => autoUpdater.checkForUpdates().catch(() => {});
 
-  // Un delai au demarrage pour ne pas concurrencer la connexion initiale,
-  // puis un controle toutes les 6h — utile si l'appli reste ouverte plusieurs
-  // jours (un PC dedie a l'overlay, par exemple).
-  setTimeout(verifier, 10000);
-  setInterval(verifier, 6 * 60 * 60 * 1000).unref();
+  if (MAJ_AUTO_ACTIVE) {
+    // Un delai au demarrage pour ne pas concurrencer la connexion initiale,
+    // puis un controle toutes les 6h — utile si l'appli reste ouverte plusieurs
+    // jours (un PC dedie a l'overlay, par exemple).
+    setTimeout(verifier, 10000);
+    setInterval(verifier, 6 * 60 * 60 * 1000).unref();
+  }
+}
+
+/** Verification demandee a la main depuis le menu : celle-la donne toujours une reponse visible. */
+function verifierMajMaintenant() {
+  if (!app.isPackaged) return;
+  verificationManuelleEnCours = true;
+  console.log('[maj] Verification manuelle...');
+  majMenu();
+  autoUpdater.checkForUpdates().catch((erreur) => {
+    verificationManuelleEnCours = false;
+    console.warn('[maj] Verification impossible :', erreur.message);
+  });
 }
 
 // --------------------------------------------------------------------------

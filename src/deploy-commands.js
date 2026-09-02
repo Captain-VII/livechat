@@ -25,6 +25,10 @@ const passer = new SlashCommandBuilder()
   .setName('passer')
   .setDescription('Passe le meme actuellement affiche sur LiveChat');
 
+const connectes = new SlashCommandBuilder()
+  .setName('connectes')
+  .setDescription('Liste qui a son overlay LiveChat ouvert en ce moment');
+
 const rest = new REST().setToken(DISCORD_TOKEN);
 
 const route = DISCORD_GUILD_ID
@@ -32,11 +36,11 @@ const route = DISCORD_GUILD_ID
   : Routes.applicationCommands(DISCORD_CLIENT_ID);
 
 try {
-  await rest.put(route, { body: [meme.toJSON(), passer.toJSON()] });
+  await rest.put(route, { body: [meme.toJSON(), passer.toJSON(), connectes.toJSON()] });
   console.log(
     DISCORD_GUILD_ID
-      ? `/meme et /passer enregistrees sur le serveur ${DISCORD_GUILD_ID} : disponibles tout de suite.`
-      : '/meme et /passer enregistrees globalement : comptez jusqu\'a une heure de propagation.',
+      ? `/meme, /passer et /connectes enregistrees sur le serveur ${DISCORD_GUILD_ID} : disponibles tout de suite.`
+      : '/meme, /passer et /connectes enregistrees globalement : comptez jusqu\'a une heure de propagation.',
   );
 } catch (error) {
   console.error('Enregistrement impossible :', error);
