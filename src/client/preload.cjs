@@ -10,4 +10,6 @@ contextBridge.exposeInMainWorld('livechat', {
   surRetrait: (callback) => ipcRenderer.on('retrait', () => callback()),
   surSortieAudio: (callback) => ipcRenderer.on('sortie-audio', (_evenement, id) => callback(id)),
   annoncerSorties: (sorties) => ipcRenderer.send('sorties-audio', sorties),
+  demanderPasser: () => ipcRenderer.send('demander-passer'),
+  survolBoutonPasser: (survole) => ipcRenderer.send('survol-bouton-passer', survole),
 });

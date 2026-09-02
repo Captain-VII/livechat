@@ -518,6 +518,15 @@ function surSortiesAnnoncees(liste) {
 
 ipcMain.on('sorties-audio', (_evenement, liste) => surSortiesAnnoncees(liste));
 
+// Le bouton "Passer" affiche sur l'overlay lui-meme : la fenetre entiere
+// redevient cliquable pendant le survol (le seul moyen d'avoir une zone
+// cliquable dans une fenetre par ailleurs traversee par les clics), et
+// repasse traversee des que le curseur en sort.
+ipcMain.on('demander-passer', () => demanderPasser());
+ipcMain.on('survol-bouton-passer', (_evenement, survole) => {
+  fenetre?.setIgnoreMouseEvents(!survole, { forward: true });
+});
+
 // --------------------------------------------------------------------------
 // La fenetre de reglage du serveur : le seul endroit ou un ami sans terminal
 // doit taper quelque chose.

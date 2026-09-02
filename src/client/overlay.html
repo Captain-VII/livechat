@@ -112,6 +112,27 @@
     text-shadow: 0 4px 18px rgba(0, 0, 0, .85), 0 1px 4px rgba(0, 0, 0, .9);
   }
 
+  /* Le bouton "passer" : contrairement au badge/a la legende, penses pour
+     flotter sans fond, ici c'est un controle, il doit se voir comme
+     cliquable. Coin oppose au badge auteur, meme logique position:fixed. */
+  .bouton-passer {
+    position: fixed;
+    top: 44px;
+    right: 44px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, .55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    color: #fff;
+    cursor: pointer;
+    pointer-events: auto;
+    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, .65));
+  }
+
   /* La seule animation : une apparition nette, sans rotation ni fondu long —
      le meme et le badge auteur entrent legerement trop grands et se
      stabilisent d'un coup sec. */
@@ -121,12 +142,13 @@
   }
 
   .contenu,
-  .badge-auteur {
+  .badge-auteur,
+  .bouton-passer {
     animation: apparaitre 300ms cubic-bezier(.15, .85, .25, 1) both;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .contenu, .badge-auteur { animation: none; }
+    .contenu, .badge-auteur, .bouton-passer { animation: none; }
   }
 </style>
 </head>
@@ -198,6 +220,10 @@
     function retirer() {
       clearTimeout(minuteur);
       minuteur = null;
+      // Filet de securite : si le curseur etait encore sur le bouton "passer"
+      // au moment ou le meme disparait, on ne laisse pas la fenetre coincee
+      // en mode "cliquable" alors qu'il n'y a plus rien a cliquer dessus.
+      window.livechat.survolBoutonPasser(false);
       scene.replaceChildren();
     }
 
@@ -301,10 +327,22 @@
       return el;
     }
 
+    /** Le bouton "passer" : seule zone cliquable de toute la fenetre. */
+    function boutonPasser() {
+      const el = document.createElement('div');
+      el.className = 'bouton-passer';
+      el.textContent = '⏭';
+      el.title = 'Passer ce meme';
+      el.addEventListener('mouseenter', () => window.livechat.survolBoutonPasser(true));
+      el.addEventListener('mouseleave', () => window.livechat.survolBoutonPasser(false));
+      el.addEventListener('click', () => window.livechat.demanderPasser());
+      return el;
+    }
+
     // Un seul meme a l'ecran a la fois : le suivant remplace le precedent.
     window.livechat.surMeme((meme) => {
       clearTimeout(minuteur);
-      scene.replaceChildren(contenu(meme), badgeAuteur(meme));
+      scene.replaceChildren(contenu(meme), badgeAuteur(meme), boutonPasser());
       minuteur = setTimeout(retirer, meme.duree ?? 8000);
     });
 

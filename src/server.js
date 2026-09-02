@@ -6,6 +6,9 @@ import { spawn } from 'node:child_process';
 
 import { WebSocketServer } from 'ws';
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   Client,
   Events,
   GatewayIntentBits,
@@ -95,6 +98,9 @@ let enPause = false;
  */
 let enCours = null;
 
+/** Le message Discord qui porte le bouton "Passer" du meme actuellement affiche. */
+let messageControle = null;
+
 /**
  * Met un meme dans la file. Renvoie le nombre de memes devant lui.
  * Rien n'est fige ici : id et rotation sont decides au moment ou le meme est
@@ -131,6 +137,7 @@ async function defiler() {
   if (!meme) {
     enCours = null;
     diffuser({ type: 'retrait' });
+    actualiserMessageControle();
     return;
   }
 
@@ -148,6 +155,7 @@ async function defiler() {
 
   enCours = { meme: feuille, finPrevue: Date.now() + duree };
   diffuser({ type: 'meme', meme: feuille });
+  actualiserMessageControle();
   console.log(
     `[livechat] ${feuille.author.name} -> ${feuille.mediaUrl ?? feuille.text ?? ''} (${duree}ms)`,
   );
@@ -159,7 +167,51 @@ function passer() {
   minuteur = null;
   enCours = null;
   diffuser({ type: 'retrait' });
+  actualiserMessageControle();
   relancer();
+}
+
+/**
+ * Poste (ou remplace) le message Discord public qui porte le bouton "Passer"
+ * du meme actuellement affiche. Gere les trois transitions (rien->meme,
+ * meme->meme, meme->rien) en un seul endroit : l'ancien message perd son
+ * bouton, un nouveau est poste si necessaire.
+ */
+async function actualiserMessageControle() {
+  if (messageControle) {
+    const ancien = messageControle;
+    messageControle = null;
+    try {
+      await ancien.edit({ components: [] });
+    } catch {
+      // Deja supprime (par un humain, ou une purge Discord) : tant pis.
+    }
+  }
+
+  if (!enCours) return;
+
+  const salon = client.channels.cache.find(
+    (c) =>
+      c.name === WALL_CHANNEL &&
+      typeof c.send === 'function' &&
+      (!process.env.DISCORD_GUILD_ID || c.guild?.id === process.env.DISCORD_GUILD_ID),
+  );
+  if (!salon) return;
+
+  try {
+    const bouton = new ButtonBuilder()
+      .setCustomId(`passer:${enCours.meme.id}`)
+      .setLabel('Passer')
+      .setEmoji('⏭️')
+      .setStyle(ButtonStyle.Secondary);
+
+    messageControle = await salon.send({
+      content: `**${enCours.meme.author.name}** est a l'ecran.`,
+      components: [new ActionRowBuilder().addComponents(bouton)],
+    });
+  } catch (erreur) {
+    console.warn('[livechat] Bouton Passer : envoi impossible :', erreur.message);
+  }
 }
 
 function basculerPause() {
@@ -542,6 +594,18 @@ function dureeLisible(ms) {
 }
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isButton()) {
+    if (!interaction.customId.startsWith('passer:')) return;
+    const idCible = Number(interaction.customId.slice('passer:'.length));
+    if (enCours?.meme.id !== idCible) {
+      await interaction.reply({ content: 'Deja passe.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    await interaction.deferUpdate(); // actualiserMessageControle() fera l'edition
+    passer();
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   if (interaction.commandName === 'connectes') {
