@@ -1,6 +1,6 @@
 {
-  "name": "le-mur",
-  "version": "1.1.1",
+  "name": "livechat",
+  "version": "2.0.0",
   "description": "Un overlay de memes en direct, alimente depuis Discord, partageable entre plusieurs ecrans.",
   "type": "module",
   "private": true,
@@ -22,8 +22,8 @@
   },
   "main": "src/client/main.js",
   "build": {
-    "appId": "fr.le-mur.overlay",
-    "productName": "Le mur",
+    "appId": "fr.livechat.overlay",
+    "productName": "LiveChat",
     "files": [
       "src/client/**/*",
       "package.json",
@@ -46,14 +46,14 @@
       "oneClick": true,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
-      "artifactName": "le-mur-Setup-${version}.exe",
+      "artifactName": "LiveChat-Setup-${version}.exe",
       "deleteAppDataOnUninstall": true
     },
     "publish": [
       {
         "provider": "github",
         "owner": "Captain-VII",
-        "repo": "le-mur"
+        "repo": "livechat"
       }
     ]
   }

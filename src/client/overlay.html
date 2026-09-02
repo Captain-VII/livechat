@@ -6,7 +6,7 @@
      envoie. Pas de script distant, pas d'eval. -->
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; img-src https: data:; media-src https: data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
-<title>Le mur</title>
+<title>LiveChat</title>
 <style>
   :root {
     --papier: #f3efe4;
@@ -165,7 +165,7 @@
     async function annoncerSorties() {
       try {
         const tous = await navigator.mediaDevices.enumerateDevices();
-        window.mur.annoncerSorties(
+        window.livechat.annoncerSorties(
           tous
             .filter((d) => d.kind === 'audiooutput')
             .map((d) => ({ deviceId: d.deviceId, label: d.label })),
@@ -186,7 +186,7 @@
     navigator.mediaDevices?.addEventListener('devicechange', annoncerSorties);
     annoncerSorties();
 
-    window.mur.surSortieAudio((id) => {
+    window.livechat.surSortieAudio((id) => {
       sortieAudio = id;
       // Le meme en cours suit tout de suite, sans attendre le suivant.
       scene.querySelectorAll('video').forEach(router);
@@ -303,14 +303,14 @@
     }
 
     // Un seul meme a l'ecran a la fois : le suivant remplace le precedent.
-    window.mur.surMeme((meme) => {
+    window.livechat.surMeme((meme) => {
       clearTimeout(minuteur);
       scene.replaceChildren(feuille(meme));
       minuteur = setTimeout(retirer, meme.duree ?? 8000);
     });
 
     // Le process principal a cache la fenetre : on nettoie derriere lui.
-    window.mur.surRetrait(retirer);
+    window.livechat.surRetrait(retirer);
   </script>
 </body>
 </html>

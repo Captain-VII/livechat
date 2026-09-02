@@ -21,7 +21,7 @@ function reglage(nom, defaut, { min = 0, max = Infinity } = {}) {
   if (brut === undefined || brut.trim() === '') return defaut;
   const valeur = Number(brut);
   if (!Number.isFinite(valeur) || valeur < min || valeur > max) {
-    console.warn(`[mur] ${nom} invalide ("${brut}") : on retombe sur ${defaut}.`);
+    console.warn(`[livechat] ${nom} invalide ("${brut}") : on retombe sur ${defaut}.`);
     return defaut;
   }
   return valeur;
@@ -41,7 +41,7 @@ const ATTENTE_EMBED_MS = reglage('EMBED_WAIT_MS', 6000, { min: 500 });
 
 // Une video joue sa duree reelle plutot qu'un temps fixe : un clip de 3s ne
 // traine pas 8s, un clip de 20s n'est pas coupe au milieu. Ce plafond evite
-// qu'un film entier ne monopolise le mur.
+// qu'un film entier ne monopolise LiveChat.
 const DUREE_VIDEO_MAX_MS = reglage('OVERLAY_VIDEO_MAX_MS', 60000, { min: 1000 });
 
 // 'cloudflare' : un tunnel s'ouvre tout seul au demarrage et son adresse est
@@ -55,7 +55,7 @@ const SALON_ANNONCE = (process.env.ANNOUNCE_CHANNEL ?? '').trim() || WALL_CHANNE
 // Garde le trace du dernier message d'annonce par salon, pour l'effacer avant
 // d'en poster un nouveau : sinon chaque redemarrage laisse une adresse morte
 // derriere lui dans Discord.
-const ETAT_ANNONCES_PATH = path.join(process.cwd(), '.mur-annonces.json');
+const ETAT_ANNONCES_PATH = path.join(process.cwd(), '.livechat-annonces.json');
 
 function lireDernieresAnnonces() {
   try {
@@ -106,7 +106,7 @@ function enfiler(meme) {
 
   if (file.length > FILE_MAX) {
     file.shift();
-    console.warn('[mur] File pleine : le plus vieux meme en attente est passe a la trappe.');
+    console.warn('[livechat] File pleine : le plus vieux meme en attente est passe a la trappe.');
   }
 
   relancer();
@@ -149,7 +149,7 @@ async function defiler() {
   enCours = { meme: feuille, finPrevue: Date.now() + duree };
   diffuser({ type: 'meme', meme: feuille });
   console.log(
-    `[mur] ${feuille.author.name} -> ${feuille.mediaUrl ?? feuille.text ?? ''} (${duree}ms)`,
+    `[livechat] ${feuille.author.name} -> ${feuille.mediaUrl ?? feuille.text ?? ''} (${duree}ms)`,
   );
   minuteur = setTimeout(defiler, duree + GAP_MS);
 }
@@ -170,7 +170,7 @@ function basculerPause() {
   } else {
     relancer();
   }
-  console.log(`[mur] ${enPause ? 'En pause.' : 'Reprise.'} ${file.length} en attente.`);
+  console.log(`[livechat] ${enPause ? 'En pause.' : 'Reprise.'} ${file.length} en attente.`);
 }
 
 // --------------------------------------------------------------------------
@@ -269,7 +269,7 @@ async function dureeVideoMs(url) {
     if (secondes == null || !Number.isFinite(secondes) || secondes <= 0) return null;
     return Math.min(Math.round(secondes * 1000), DUREE_VIDEO_MAX_MS);
   } catch (erreur) {
-    console.warn(`[mur] Duree de la video illisible (${erreur.message}), duree par defaut utilisee.`);
+    console.warn(`[livechat] Duree de la video illisible (${erreur.message}), duree par defaut utilisee.`);
     return null;
   }
 }
@@ -305,7 +305,7 @@ function diffuser(message) {
 
 wss.on('connection', (socket, requete) => {
   const adresse = requete.socket.remoteAddress;
-  console.log(`[mur] Overlay connecte (${adresse}). ${wss.clients.size} au total.`);
+  console.log(`[livechat] Overlay connecte (${adresse}). ${wss.clients.size} au total.`);
 
   // Rattrapage : qui se connecte (ou se reconnecte apres un accroc reseau)
   // pendant qu'un meme est deja a l'ecran le recoit tout de suite, avec le
@@ -327,7 +327,7 @@ wss.on('connection', (socket, requete) => {
   });
 
   socket.on('close', () => {
-    console.log(`[mur] Overlay deconnecte. ${wss.clients.size} restant(s).`);
+    console.log(`[livechat] Overlay deconnecte. ${wss.clients.size} restant(s).`);
   });
 
   // Seul message qu'un client envoie : la demande de passer le meme affiche.
@@ -339,7 +339,7 @@ wss.on('connection', (socket, requete) => {
       return;
     }
     if (message?.type === 'passer') {
-      console.log(`[mur] Passer demande depuis l'overlay (${adresse}).`);
+      console.log(`[livechat] Passer demande depuis l'overlay (${adresse}).`);
       passer();
     }
   });
@@ -357,9 +357,9 @@ setInterval(() => {
 }, 15000).unref();
 
 serveurHttp.listen(PORT, () => {
-  console.log(`[mur] Serveur pret sur le port ${PORT}.`);
+  console.log(`[livechat] Serveur pret sur le port ${PORT}.`);
   console.log(
-    `[mur] Overlay local : lance le client avec SERVER_URL=ws://localhost:${PORT}`,
+    `[livechat] Overlay local : lance le client avec SERVER_URL=ws://localhost:${PORT}`,
   );
   demarrerTunnel();
 });
@@ -456,7 +456,7 @@ async function annoncerSiPret() {
 
     try {
       const message = await salon.send(
-        "**Le mur est en ligne.** Colle cette adresse dans l'appli " +
+        "**LiveChat est en ligne.** Colle cette adresse dans l'appli " +
           "(icone de la barre des taches > *Configurer le serveur*) :\n" +
           `\`\`\`\n${urlPublique}\n\`\`\``,
       );
@@ -619,7 +619,7 @@ function patienter(message, author, text) {
       // Le lien n'a rien donne, mais il y avait autre chose a dire.
       enfiler({ author, text, mediaUrl: null, mediaType: null });
     } else {
-      console.warn(`[mur] Lien sans media utilisable, laisse de cote : ${message.content.trim()}`);
+      console.warn(`[livechat] Lien sans media utilisable, laisse de cote : ${message.content.trim()}`);
     }
   }, ATTENTE_EMBED_MS);
 
@@ -674,7 +674,7 @@ if (!process.env.DISCORD_TOKEN) {
 }
 
 process.on('SIGINT', () => {
-  console.log('\n[mur] Arret.');
+  console.log('\n[livechat] Arret.');
   processusTunnel?.kill();
   client.destroy().catch(() => {});
   process.exit(0);

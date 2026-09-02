@@ -5,7 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 // La page n'a ni Node, ni acces au disque. Elle recoit ce qu'il faut afficher,
 // et ne renvoie qu'une chose : la liste des sorties audio, que seul un renderer
 // peut enumerer.
-contextBridge.exposeInMainWorld('mur', {
+contextBridge.exposeInMainWorld('livechat', {
   surMeme: (callback) => ipcRenderer.on('meme', (_evenement, meme) => callback(meme)),
   surRetrait: (callback) => ipcRenderer.on('retrait', () => callback()),
   surSortieAudio: (callback) => ipcRenderer.on('sortie-audio', (_evenement, id) => callback(id)),

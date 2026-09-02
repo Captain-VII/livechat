@@ -1,4 +1,4 @@
-# Le mur
+# LiveChat
 
 Les memes de la bande, en direct, **par-dessus l'écran de chacun**. Quelqu'un
 balance une image sur Discord, elle s'affiche en grand au milieu de l'écran de
@@ -131,7 +131,7 @@ C'est tout. Au prochain `npm run server`, le déroulé est :
 3. Dès que l'adresse est prête **et** que le bot est connecté, il poste dans
    `#mur-a-memes` :
 
-   > **Le mur est en ligne.** Colle cette adresse dans l'appli (icône de la
+   > **LiveChat est en ligne.** Colle cette adresse dans l'appli (icône de la
    > barre des tâches > *Configurer le serveur*) :
    > ```
    > wss://quelque-chose-au-hasard.trycloudflare.com
@@ -190,11 +190,11 @@ npm run dist
 
 Produit un petit installeur dans `dist/` :
 
-- `le-mur-Setup-<version>.exe` — l'installeur, ~110 Mo (le runtime Electron,
+- `LiveChat-Setup-<version>.exe` — l'installeur, ~110 Mo (le runtime Electron,
   incompressible). Double-clic, installation silencieuse en quelques secondes
-  dans `%LOCALAPPDATA%\Programs\le-mur\` (pas besoin d'être admin), l'appli se
+  dans `%LOCALAPPDATA%\Programs\LiveChat\` (pas besoin d'être admin), l'appli se
   lance toute seule à la fin.
-- `latest.yml` et `le-mur-Setup-<version>.exe.blockmap` — les fichiers dont la
+- `latest.yml` et `LiveChat-Setup-<version>.exe.blockmap` — les fichiers dont la
   **mise à jour automatique** a besoin pour savoir qu'une nouvelle version
   existe. Sans eux, l'app continue de tourner mais ne se met jamais à jour.
 
@@ -207,8 +207,8 @@ lancement, un chemin qui change tout le temps ne peut servir de point d'ancrage
 ### Distribution par GitHub Releases
 
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag v2.0.0
+git push origin v2.0.0
 ```
 
 Sur la page GitHub du dépôt : **Releases > Draft a new release**, choisis le
@@ -221,6 +221,17 @@ configurer de plus.
 mise à jour automatique intégrée, elle ne peut pas se déclencher toute seule
 pour eux. Ils doivent retélécharger et relancer une fois l'installeur
 manuellement ; à partir de là, les mises à jour suivantes seront automatiques.
+
+**Si tes potes ont une version « Le mur » installée (avant la v2.0.0)** : le
+projet s'appelait encore comme ça. Le renommage en LiveChat change le dossier
+d'installation et le dossier de configuration — comme pour le portable
+ci-dessus, la mise à jour automatique ne peut pas migrer toute seule d'une
+appli vers une autre. Chacun doit retélécharger et relancer l'installeur
+`LiveChat-Setup-2.0.0.exe` une fois (l'ancienne « Le mur » peut être
+désinstallée séparément, elle ne sera pas remplacée automatiquement), et
+recoller l'adresse du serveur dans la fenêtre qui s'ouvre au premier
+lancement. À partir de là, les mises à jour suivantes seront automatiques,
+comme avant.
 
 ### Ce que voit un ami qui lance l'installeur
 
@@ -283,7 +294,7 @@ défaut). **Les vidéos jouent leur durée réelle** : un clip de 3 s ne traîne
 inutilement, un clip de 20 s n'est pas coupé au milieu. C'est lu directement
 dans le fichier (la boîte `mvhd` d'un MP4, sans FFmpeg), plafonné à
 `OVERLAY_VIDEO_MAX_MS` (60 s par défaut) pour qu'un pote ne puisse pas
-monopoliser le mur avec un film entier. Si la durée ne peut pas être lue (une
+monopoliser LiveChat avec un film entier. Si la durée ne peut pas être lue (une
 poignée de formats particuliers, ou un souci réseau passager), la vidéo retombe
 sur `OVERLAY_DURATION_MS` comme avant.
 
@@ -309,9 +320,9 @@ Chacun choisit son propre écran, indépendamment des autres. Au démarrage, la
 console liste les écrans détectés :
 
 ```
-[mur] Ecrans detectes (numero a mettre dans OVERLAY_DISPLAY) :
-[mur]   1. MAG 274Q X24 - 2560x1440 (principal)  <-- les memes s'affichent ici
-[mur]   2. MAG 274QF X24 - 1440x2560
+[livechat] Ecrans detectes (numero a mettre dans OVERLAY_DISPLAY) :
+[livechat]   1. MAG 274Q X24 - 2560x1440 (principal)  <-- les memes s'affichent ici
+[livechat]   2. MAG 274QF X24 - 1440x2560
 ```
 
 `OVERLAY_DISPLAY` accepte `principal` (ou vide), un numéro, ou un bout du nom —
@@ -430,7 +441,7 @@ l'adresse.
 changé (normal, sur le plan gratuit). Renvoie la nouvelle dans Discord, chacun
 la recolle dans « Configurer le serveur ».
 
-**`Le mur tourne déjà`** — une instance du client tourne déjà sur cette
+**`LiveChat tourne déjà`** — une instance du client tourne déjà sur cette
 machine. Son icône est dans la barre des tâches ; quitte-la depuis là avant
 d'en relancer une.
 

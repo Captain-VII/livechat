@@ -30,7 +30,7 @@ function reglage(nom, defaut, { min = 0, max = Infinity } = {}) {
   if (brut === undefined || brut.trim() === '') return defaut;
   const valeur = Number(brut);
   if (!Number.isFinite(valeur) || valeur < min || valeur > max) {
-    console.warn(`[mur] ${nom} invalide ("${brut}") : on retombe sur ${defaut}.`);
+    console.warn(`[livechat] ${nom} invalide ("${brut}") : on retombe sur ${defaut}.`);
     return defaut;
   }
   return valeur;
@@ -56,12 +56,15 @@ const MAJ_AUTO_ACTIVE = !/^(off|non|false)$/i.test(
   (process.env.OVERLAY_AUTO_UPDATE ?? 'on').trim(),
 );
 
-// Un carre de papier scotche, 32x32 : l'icone de la barre des taches, en dur,
-// pour ne pas trimballer un binaire dans le depot.
+// Une bulle de discussion avec une pastille "live", 32x32 : l'icone de la
+// barre des taches, en dur, pour ne pas trimballer un binaire dans le depot.
 const ICONE_PNG =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAVUlEQVR42mNgGAUk' +
-  'gEfXNrwmBo86gCJL9u1Y8R8XJtYB+MwgygGf3z/Biol1AC79Q98BlOJRB4w6YNQBow4YdcCoA0YdMOqAUQcM' +
-  'HQfQEo/2LwcdAABAP5xHY/MUgQAAAABJRU5ErkJggg==';
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABN0lEQVR42mN4Eq7HMJCY' +
+  'YVg74PP7JwKf3z9xgGIBchwA0uRAKn5eHuLz8faZ7Z/fP/mPhvvRHYLL4oAn4Xrnn4Tr/ScVP02w/P/h0qH/WCyH4f' +
+  '2EHJBAjsUw/GZxJz7LYTgBlwMUKLEchD/eOUuMA/bjckA/pQ4gwnIwxuWA/ZQ64NOzmwQt//Tw8hOaOeDttgUEHfD+' +
+  'yMbjNHPAsyxXvKEAknuW6dxOMweA8POSAKyOACVQkBzQrgaaOgBWHryeVQeOkjdrpvx/NaEILAaVp70DCOBRB4w6AK' +
+  'cD5tPJAQ64HOBAB8vvE6qOaR0KAcQ0SPpp5PMAUppkoKbTezRDzkMTECm4ADnOSXGAARbLBejZKkZOC/MHolkOC/7' +
+  '+gegXwBqmCQPVMZlPD8txOUAAmgBH+4YjwwEAz3gC4Y1oil8AAAAASUVORK5CYII=';
 
 // Chromium refuse l'autoplay avec du son sans geste utilisateur. Il n'y a personne
 // pour cliquer sur un overlay traverse par les clics : on leve la regle.
@@ -125,20 +128,20 @@ function connecter() {
     return;
   }
 
-  console.log(`[mur] Connexion a ${url}...`);
+  console.log(`[livechat] Connexion a ${url}...`);
   majMenu();
   notifierConfig({ type: 'connexion' });
 
   try {
     socket = new WebSocket(url);
   } catch (erreur) {
-    console.error('[mur] Adresse de serveur invalide :', erreur.message);
+    console.error('[livechat] Adresse de serveur invalide :', erreur.message);
     ouvrirConfig();
     return;
   }
 
   socket.addEventListener('open', () => {
-    console.log('[mur] Connecte au serveur.');
+    console.log('[livechat] Connecte au serveur.');
     delaiReconnexion = DELAI_RECONNEXION_MIN_MS;
     majMenu();
     notifierConfig({ type: 'ouvert' });
@@ -157,7 +160,7 @@ function connecter() {
   });
 
   socket.addEventListener('close', () => {
-    console.warn(`[mur] Deconnecte du serveur. Nouvelle tentative dans ${delaiReconnexion} ms.`);
+    console.warn(`[livechat] Deconnecte du serveur. Nouvelle tentative dans ${delaiReconnexion} ms.`);
     majMenu();
     notifierConfig({ type: 'ferme', prochaineTentativeMs: delaiReconnexion });
     clearTimeout(tentativeReconnexion);
@@ -238,7 +241,7 @@ function cacher() {
 
 function basculerSon() {
   sonCoupe = !sonCoupe;
-  console.log(`[mur] Son ${sonCoupe ? 'coupe' : 'retabli'}.`);
+  console.log(`[livechat] Son ${sonCoupe ? 'coupe' : 'retabli'}.`);
   majMenu();
 }
 
@@ -274,9 +277,9 @@ function ecranVoulu() {
 
   if (trouve) return trouve;
 
-  console.warn(`[mur] OVERLAY_DISPLAY="${ECRAN_VOULU}" ne correspond a aucun ecran.`);
-  console.warn('[mur] On reste sur le principal. Ecrans disponibles :');
-  liste.forEach((e, i) => console.warn(`[mur]   ${decrire(e, i)}`));
+  console.warn(`[livechat] OVERLAY_DISPLAY="${ECRAN_VOULU}" ne correspond a aucun ecran.`);
+  console.warn('[livechat] On reste sur le principal. Ecrans disponibles :');
+  liste.forEach((e, i) => console.warn(`[livechat]   ${decrire(e, i)}`));
   return liste[0];
 }
 
@@ -303,7 +306,7 @@ function placerSur(ecran, { manuel = true } = {}) {
     fenetre.setResizable(false);
   }
 
-  console.log(`[mur] Les memes s'affichent sur : ${ecran.label} (${ecran.bounds.width}x${ecran.bounds.height}).`);
+  console.log(`[livechat] Les memes s'affichent sur : ${ecran.label} (${ecran.bounds.width}x${ecran.bounds.height}).`);
   majMenu();
 }
 
@@ -314,7 +317,7 @@ function surChangementEcrans() {
     placerSur(actuel, { manuel: false }); // ses bornes ont pu changer
     return;
   }
-  console.warn("[mur] L'ecran choisi a disparu.");
+  console.warn("[livechat] L'ecran choisi a disparu.");
   ecranBascule = false;
   placerSur(ecranVoulu());
 }
@@ -335,7 +338,7 @@ const SCRIPT_SONDE_PLEIN_ECRAN = `
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
-public class MurNative {
+public class LiveChatNative {
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
   [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
@@ -347,12 +350,12 @@ public class MurNative {
 }
 '@
 $state = 0
-[MurNative]::SHQueryUserNotificationState([ref]$state) | Out-Null
-$hwnd = [MurNative]::GetForegroundWindow()
-$hmon = [MurNative]::MonitorFromWindow($hwnd, 2)
-$mi = New-Object MurNative+MONITORINFO
-$mi.cbSize = [System.Runtime.InteropServices.Marshal]::SizeOf([type][MurNative+MONITORINFO])
-[MurNative]::GetMonitorInfo($hmon, [ref]$mi) | Out-Null
+[LiveChatNative]::SHQueryUserNotificationState([ref]$state) | Out-Null
+$hwnd = [LiveChatNative]::GetForegroundWindow()
+$hmon = [LiveChatNative]::MonitorFromWindow($hwnd, 2)
+$mi = New-Object LiveChatNative+MONITORINFO
+$mi.cbSize = [System.Runtime.InteropServices.Marshal]::SizeOf([type][LiveChatNative+MONITORINFO])
+[LiveChatNative]::GetMonitorInfo($hmon, [ref]$mi) | Out-Null
 @{ state = $state; left = $mi.rcMonitor.Left; top = $mi.rcMonitor.Top; right = $mi.rcMonitor.Right; bottom = $mi.rcMonitor.Bottom } | ConvertTo-Json -Compress
 `.trim();
 
@@ -371,7 +374,7 @@ let avertiEchecSonde = false;
 
 function basculerBasculeAuto() {
   basculeAutoActive = !basculeAutoActive;
-  console.log(`[mur] Bascule automatique d'ecran : ${basculeAutoActive ? 'activee' : 'desactivee'}.`);
+  console.log(`[livechat] Bascule automatique d'ecran : ${basculeAutoActive ? 'activee' : 'desactivee'}.`);
   majMenu();
 }
 
@@ -389,7 +392,7 @@ async function verifierPleinEcran() {
   } catch (erreur) {
     if (!avertiEchecSonde) {
       avertiEchecSonde = true;
-      console.warn('[mur] Detection du plein ecran indisponible :', erreur.message);
+      console.warn('[livechat] Detection du plein ecran indisponible :', erreur.message);
     }
     return;
   }
@@ -421,7 +424,7 @@ async function verifierPleinEcran() {
   if (comptePleinEcran >= SEUIL_CONFIRMATION_POLLS && !ecranBascule && !enPause) {
     const autre = ecrans().find((e) => e.id !== ecranPrefere?.id);
     if (autre) {
-      console.log('[mur] Plein ecran detecte sur cet ecran : bascule automatique.');
+      console.log('[livechat] Plein ecran detecte sur cet ecran : bascule automatique.');
       ecranBascule = true;
       placerSur(autre, { manuel: false });
     }
@@ -429,7 +432,7 @@ async function verifierPleinEcran() {
   }
 
   if (ecranBascule && compteRetour >= SEUIL_CONFIRMATION_POLLS) {
-    console.log("[mur] Plein ecran termine : retour sur l'ecran prefere.");
+    console.log("[livechat] Plein ecran termine : retour sur l'ecran prefere.");
     ecranBascule = false;
     if (ecranPrefere) placerSur(ecranPrefere, { manuel: false });
   }
@@ -458,9 +461,9 @@ function sortieVoulue() {
   );
   if (trouvee) return trouvee.deviceId;
 
-  console.warn(`[mur] OVERLAY_AUDIO_DEVICE="${SORTIE_VOULUE}" ne correspond a aucune sortie.`);
-  console.warn('[mur] On reste sur la sortie par defaut. Sorties disponibles :');
-  sortiesUtiles().forEach((s) => console.warn(`[mur]   ${s.label}`));
+  console.warn(`[livechat] OVERLAY_AUDIO_DEVICE="${SORTIE_VOULUE}" ne correspond a aucune sortie.`);
+  console.warn('[livechat] On reste sur la sortie par defaut. Sorties disponibles :');
+  sortiesUtiles().forEach((s) => console.warn(`[livechat]   ${s.label}`));
   return null;
 }
 
@@ -471,7 +474,7 @@ function routerVers(deviceId) {
     fenetre.webContents.send('sortie-audio', deviceId ?? 'default');
   }
   const nom = sortiesUtiles().find((s) => s.deviceId === deviceId)?.label;
-  console.log(`[mur] Son envoye sur : ${nom ?? 'la sortie par defaut de Windows'}.`);
+  console.log(`[livechat] Son envoye sur : ${nom ?? 'la sortie par defaut de Windows'}.`);
   majMenu();
 }
 
@@ -481,14 +484,14 @@ function surSortiesAnnoncees(liste) {
   sortiesAudio = liste;
 
   if (premiereFois) {
-    console.log('[mur] Sorties audio (nom a mettre dans OVERLAY_AUDIO_DEVICE) :');
-    sortiesUtiles().forEach((s) => console.log(`[mur]   ${s.label}`));
+    console.log('[livechat] Sorties audio (nom a mettre dans OVERLAY_AUDIO_DEVICE) :');
+    sortiesUtiles().forEach((s) => console.log(`[livechat]   ${s.label}`));
   }
 
   // La sortie choisie a pu disparaitre avec le peripherique.
   const existeEncore = sortiesUtiles().some((s) => s.deviceId === sortieChoisieId);
   if (sortieChoisieId && !existeEncore) {
-    console.warn('[mur] La sortie audio choisie a disparu. Retour a celle par defaut.');
+    console.warn('[livechat] La sortie audio choisie a disparu. Retour a celle par defaut.');
     routerVers(sortieVoulue());
     return;
   }
@@ -534,7 +537,7 @@ function ouvrirConfig() {
     resizable: false,
     minimizable: false,
     maximizable: false,
-    title: 'Le mur — Serveur',
+    title: 'LiveChat — Serveur',
     webPreferences: {
       preload: path.join(__dirname, 'config-preload.cjs'),
       contextIsolation: true,
@@ -612,7 +615,7 @@ function majMenu() {
 
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: `Le mur — ${etatConnexion}`, enabled: false },
+      { label: `LiveChat — ${etatConnexion}`, enabled: false },
       { type: 'separator' },
       {
         label: 'Passer ce meme  (Ctrl+Alt+M)',
@@ -679,7 +682,7 @@ function majMenu() {
 
 function creerTray() {
   tray = new Tray(nativeImage.createFromDataURL(ICONE_PNG));
-  tray.setToolTip('Le mur');
+  tray.setToolTip('LiveChat');
   majMenu();
   tray.on('click', () => tray.popUpContextMenu());
 }
@@ -699,7 +702,7 @@ function basculerDemarrageAvecWindows() {
   if (!app.isPackaged) return;
   const actuel = demarreAvecWindows();
   app.setLoginItemSettings({ openAtLogin: !actuel });
-  console.log(`[mur] Demarrage avec Windows : ${!actuel ? 'active' : 'desactive'}.`);
+  console.log(`[livechat] Demarrage avec Windows : ${!actuel ? 'active' : 'desactive'}.`);
   majMenu();
 }
 
@@ -724,7 +727,7 @@ function demarrerVerificationMaj() {
 
     if (Notification.isSupported()) {
       new Notification({
-        title: 'Le mur',
+        title: 'LiveChat',
         body: `Mise a jour ${info.version} installee. Redemarrage dans 15 secondes...`,
         silent: true,
       }).show();
@@ -752,7 +755,7 @@ function demarrerVerificationMaj() {
 // --------------------------------------------------------------------------
 
 if (!app.requestSingleInstanceLock()) {
-  console.error('[mur] Le mur tourne deja. Regarde dans la barre des taches.');
+  console.error('[livechat] LiveChat tourne deja. Regarde dans la barre des taches.');
   app.quit();
 } else {
   app.whenReady().then(() => {
@@ -777,13 +780,13 @@ if (!app.requestSingleInstanceLock()) {
 
     demarrerVerificationMaj();
 
-    console.log('[mur] Ecrans detectes (numero a mettre dans OVERLAY_DISPLAY) :');
+    console.log('[livechat] Ecrans detectes (numero a mettre dans OVERLAY_DISPLAY) :');
     ecrans().forEach((ecran, index) => {
       const ici = ecran.id === ecranChoisiId ? "  <-- les memes s'affichent ici" : '';
-      console.log(`[mur]   ${decrire(ecran, index)}${ici}`);
+      console.log(`[livechat]   ${decrire(ecran, index)}${ici}`);
     });
 
-    console.log("[mur] Pour quitter : l'icone dans la barre des taches.");
+    console.log("[livechat] Pour quitter : l'icone dans la barre des taches.");
 
     connecter();
   });

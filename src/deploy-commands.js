@@ -10,9 +10,9 @@ if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) {
 
 const meme = new SlashCommandBuilder()
   .setName('meme')
-  .setDescription('Envoie un meme sur le mur')
+  .setDescription('Envoie un meme sur LiveChat')
   .addAttachmentOption((option) =>
-    option.setName('fichier').setDescription('Une image ou une video a coller au mur'),
+    option.setName('fichier').setDescription('Une image ou une video a envoyer sur LiveChat'),
   )
   .addStringOption((option) =>
     option.setName('texte').setDescription('Une legende, ou juste du texte'),
@@ -23,7 +23,7 @@ const meme = new SlashCommandBuilder()
 
 const passer = new SlashCommandBuilder()
   .setName('passer')
-  .setDescription('Passe le meme actuellement affiche sur le mur');
+  .setDescription('Passe le meme actuellement affiche sur LiveChat');
 
 const rest = new REST().setToken(DISCORD_TOKEN);
 
