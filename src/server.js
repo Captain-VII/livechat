@@ -174,21 +174,44 @@ function passer() {
 /**
  * Poste (ou remplace) le message Discord public qui porte le bouton "Passer"
  * du meme actuellement affiche. Gere les trois transitions (rien->meme,
- * meme->meme, meme->rien) en un seul endroit : l'ancien message perd son
- * bouton, un nouveau est poste si necessaire.
+ * meme->meme, meme->rien) en un seul endroit : un seul message est reutilise
+ * (edite en place) tant que la file tourne, pour ne pas spammer le salon
+ * d'un nouveau message a chaque meme ; il n'est supprime que lorsqu'il n'y a
+ * plus rien a l'ecran.
  */
 async function actualiserMessageControle() {
-  if (messageControle) {
-    const ancien = messageControle;
-    messageControle = null;
-    try {
-      await ancien.edit({ components: [] });
-    } catch {
-      // Deja supprime (par un humain, ou une purge Discord) : tant pis.
+  if (!enCours) {
+    if (messageControle) {
+      const ancien = messageControle;
+      messageControle = null;
+      try {
+        await ancien.delete();
+      } catch {
+        // Deja supprime (par un humain, ou une purge Discord) : tant pis.
+      }
     }
+    return;
   }
 
-  if (!enCours) return;
+  const contenu = `**${enCours.meme.author.name}** est a l'ecran.`;
+  const composants = [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`passer:${enCours.meme.id}`)
+        .setLabel('Passer')
+        .setEmoji('⏭️')
+        .setStyle(ButtonStyle.Secondary),
+    ),
+  ];
+
+  if (messageControle) {
+    try {
+      await messageControle.edit({ content: contenu, components: composants });
+      return;
+    } catch {
+      messageControle = null; // supprime entretemps : on retombe sur un envoi neuf
+    }
+  }
 
   const salon = client.channels.cache.find(
     (c) =>
@@ -199,16 +222,7 @@ async function actualiserMessageControle() {
   if (!salon) return;
 
   try {
-    const bouton = new ButtonBuilder()
-      .setCustomId(`passer:${enCours.meme.id}`)
-      .setLabel('Passer')
-      .setEmoji('⏭️')
-      .setStyle(ButtonStyle.Secondary);
-
-    messageControle = await salon.send({
-      content: `**${enCours.meme.author.name}** est a l'ecran.`,
-      components: [new ActionRowBuilder().addComponents(bouton)],
-    });
+    messageControle = await salon.send({ content: contenu, components: composants });
   } catch (erreur) {
     console.warn('[livechat] Bouton Passer : envoi impossible :', erreur.message);
   }
