@@ -37,6 +37,29 @@ function reglage(nom, defaut, { min = 0, max = Infinity } = {}) {
   return valeur;
 }
 
+// --------------------------------------------------------------------------
+// Configuration persistante : reglages choisis a la main (menu), qui doivent
+// survivre a un redemarrage du PC. L'adresse du serveur y vivait deja seule ;
+// ecran, sortie audio, son coupe et bascule auto la rejoignent ici.
+// --------------------------------------------------------------------------
+
+const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+
+function lireConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function ecrireConfig(partiel) {
+  const config = { ...lireConfig(), ...partiel };
+  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+  return config;
+}
+
 const VOLUME = reglage('OVERLAY_VOLUME', 0.7, { min: 0, max: 1 });
 
 // Sur quel ecran les memes apparaissent. Vide ou "principal" : l'ecran principal.
@@ -48,9 +71,10 @@ const SORTIE_VOULUE = (process.env.OVERLAY_AUDIO_DEVICE ?? '').trim();
 // Bascule tout seul sur un autre ecran quand un jeu ou un film tourne en plein
 // ecran exclusif sur l'ecran choisi (sans ca, l'overlay ne pourrait pas s'y
 // dessiner de toute facon). 'off' desactive completement.
-const BASCULE_AUTO_ACTIVE = !/^(off|non|false)$/i.test(
-  (process.env.OVERLAY_AUTO_SWITCH ?? 'on').trim(),
-);
+const OVERLAY_AUTO_SWITCH_ENV = (process.env.OVERLAY_AUTO_SWITCH ?? '').trim();
+const BASCULE_AUTO_ACTIVE = OVERLAY_AUTO_SWITCH_ENV
+  ? !/^(off|non|false)$/i.test(OVERLAY_AUTO_SWITCH_ENV)
+  : (lireConfig().basculeAutoActive ?? true);
 
 // Verifie les mises a jour tout seul, en arriere-plan. 'off' desactive.
 const MAJ_AUTO_ACTIVE = !/^(off|non|false)$/i.test(
@@ -83,29 +107,12 @@ let ecranChoisiId = null;
 let ecranPrefere = null; // l'ecran "chez soi", choisi au demarrage ou a la main
 let ecranBascule = false; // true si on est la-dessus a cause de la bascule auto
 let pauseBasculeAutoJusqua = 0;
-let sonCoupe = false;
+let sonCoupe = lireConfig().sonCoupe ?? false;
 
 // --------------------------------------------------------------------------
-// Configuration persistante : l'adresse du serveur. Un ami qui lance le .exe
-// n'a ni .env ni terminal ; c'est cette petite fenetre qui la lui demande.
+// L'adresse du serveur. Un ami qui lance le .exe n'a ni .env ni terminal ;
+// c'est la petite fenetre de configuration qui la lui demande.
 // --------------------------------------------------------------------------
-
-const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
-
-function lireConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  } catch {
-    return {};
-  }
-}
-
-function ecrireConfig(partiel) {
-  const config = { ...lireConfig(), ...partiel };
-  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
-  return config;
-}
 
 /** L'URL du serveur : la variable d'environnement prime, sinon ce qui a ete sauvegarde. */
 function urlServeur() {
@@ -257,6 +264,7 @@ function cacher() {
 
 function basculerSon() {
   sonCoupe = !sonCoupe;
+  ecrireConfig({ sonCoupe });
   console.log(`[livechat] Son ${sonCoupe ? 'coupe' : 'retabli'}.`);
   majMenu();
 }
@@ -284,16 +292,19 @@ function decrire(ecran, index) {
 /** Resout OVERLAY_DISPLAY. Retombe sur le principal plutot que de ne rien afficher. */
 function ecranVoulu() {
   const liste = ecrans();
-  if (!ECRAN_VOULU || /^(principal|primary)$/i.test(ECRAN_VOULU)) return liste[0];
+  // OVERLAY_DISPLAY prime ; sinon, le dernier ecran choisi a la main (menu),
+  // retenu d'une session a l'autre.
+  const voulu = ECRAN_VOULU || lireConfig().ecranLabel || '';
+  if (!voulu || /^(principal|primary)$/i.test(voulu)) return liste[0];
 
-  const numero = Number(ECRAN_VOULU);
+  const numero = Number(voulu);
   const trouve = Number.isInteger(numero)
     ? liste[numero - 1]
-    : liste.find((e) => e.label?.toLowerCase().includes(ECRAN_VOULU.toLowerCase()));
+    : liste.find((e) => e.label?.toLowerCase().includes(voulu.toLowerCase()));
 
   if (trouve) return trouve;
 
-  console.warn(`[livechat] OVERLAY_DISPLAY="${ECRAN_VOULU}" ne correspond a aucun ecran.`);
+  console.warn(`[livechat] Ecran voulu ("${voulu}") introuvable.`);
   console.warn('[livechat] On reste sur le principal. Ecrans disponibles :');
   liste.forEach((e, i) => console.warn(`[livechat]   ${decrire(e, i)}`));
   return liste[0];
@@ -312,6 +323,8 @@ function placerSur(ecran, { manuel = true } = {}) {
     // Empeche la bascule auto de revenir immediatement dessus si l'utilisateur
     // vient justement de choisir a la main l'ecran qui est en plein ecran.
     pauseBasculeAutoJusqua = Date.now() + 20000;
+    // Un clic dans le menu : on retient ce choix pour le prochain demarrage.
+    if (ecran.label) ecrireConfig({ ecranLabel: ecran.label });
   }
 
   if (fenetre && !fenetre.isDestroyed()) {
@@ -390,6 +403,7 @@ let avertiEchecSonde = false;
 
 function basculerBasculeAuto() {
   basculeAutoActive = !basculeAutoActive;
+  ecrireConfig({ basculeAutoActive });
   console.log(`[livechat] Bascule automatique d'ecran : ${basculeAutoActive ? 'activee' : 'desactivee'}.`);
   majMenu();
 }
@@ -470,22 +484,26 @@ function sortiesUtiles() {
 
 /** Resout OVERLAY_AUDIO_DEVICE dans la liste annoncee par la fenetre. */
 function sortieVoulue() {
-  if (!SORTIE_VOULUE || /^(defaut|default)$/i.test(SORTIE_VOULUE)) return null;
+  // OVERLAY_AUDIO_DEVICE prime ; sinon, la derniere sortie choisie a la main.
+  const voulue = SORTIE_VOULUE || lireConfig().sortieAudioLabel || '';
+  if (!voulue || /^(defaut|default)$/i.test(voulue)) return null;
 
-  const trouvee = sortiesUtiles().find((s) =>
-    s.label?.toLowerCase().includes(SORTIE_VOULUE.toLowerCase()),
-  );
+  const trouvee = sortiesUtiles().find((s) => s.label?.toLowerCase().includes(voulue.toLowerCase()));
   if (trouvee) return trouvee.deviceId;
 
-  console.warn(`[livechat] OVERLAY_AUDIO_DEVICE="${SORTIE_VOULUE}" ne correspond a aucune sortie.`);
+  console.warn(`[livechat] Sortie audio voulue ("${voulue}") introuvable.`);
   console.warn('[livechat] On reste sur la sortie par defaut. Sorties disponibles :');
   sortiesUtiles().forEach((s) => console.warn(`[livechat]   ${s.label}`));
   return null;
 }
 
-/** Envoie le son vers une sortie. null = celle de Windows. */
-function routerVers(deviceId) {
+/** Envoie le son vers une sortie. null = celle de Windows. manuel : clic dans le menu, a retenir. */
+function routerVers(deviceId, { manuel = false } = {}) {
   sortieChoisieId = deviceId;
+  if (manuel) {
+    const label = sortiesUtiles().find((s) => s.deviceId === deviceId)?.label ?? null;
+    ecrireConfig({ sortieAudioLabel: label });
+  }
   if (fenetre && !fenetre.isDestroyed()) {
     fenetre.webContents.send('sortie-audio', deviceId ?? 'default');
   }
@@ -661,7 +679,7 @@ function majMenu() {
                   label: 'Sortie par defaut de Windows',
                   type: 'radio',
                   checked: sortieChoisieId === null,
-                  click: () => routerVers(null),
+                  click: () => routerVers(null, { manuel: true }),
                 },
                 { type: 'separator' },
                 ...sortiesUtiles()
@@ -670,7 +688,7 @@ function majMenu() {
                     label: sortie.label,
                     type: 'radio',
                     checked: sortie.deviceId === sortieChoisieId,
-                    click: () => routerVers(sortie.deviceId),
+                    click: () => routerVers(sortie.deviceId, { manuel: true }),
                   })),
               ],
       },
