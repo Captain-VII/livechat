@@ -228,11 +228,22 @@ async function actualiserMessageControle() {
   }
 }
 
+// Horodatage du debut de la pause en cours, pour figer le temps restant du
+// meme a l'ecran pendant qu'elle dure (sinon finPrevue - Date.now() continue
+// de s'ecouler alors que rien ne joue).
+let pauseDebut = 0;
+
 function basculerPause() {
   enPause = !enPause;
   if (enPause) {
     if (minuteur) clearTimeout(minuteur);
     minuteur = null;
+    pauseDebut = Date.now();
+  } else if (enCours) {
+    // Decale finPrevue du temps passe en pause, pour que le meme reprenne
+    // avec le temps qu'il lui restait plutot que de reboucler a zero.
+    enCours.finPrevue += Date.now() - pauseDebut;
+    minuteur = setTimeout(defiler, Math.max(0, enCours.finPrevue - Date.now()) + GAP_MS);
   } else {
     relancer();
   }
@@ -393,7 +404,7 @@ wss.on('connection', (socket, requete) => {
   // temps qu'il lui reste plutot qu'un plein 8s qui le desynchroniserait des
   // autres.
   if (enCours) {
-    const restant = enPause ? enCours.meme.duree : enCours.finPrevue - Date.now();
+    const restant = enPause ? enCours.finPrevue - pauseDebut : enCours.finPrevue - Date.now();
     if (restant > 300) {
       socket.send(JSON.stringify({ type: 'meme', meme: { ...enCours.meme, duree: restant } }));
     }
