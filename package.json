@@ -1,6 +1,6 @@
 {
   "name": "livechat",
-  "version": "2.2.2",
+  "version": "2.3.0",
   "description": "Un overlay de memes en direct, alimente depuis Discord, partageable entre plusieurs ecrans.",
   "type": "module",
   "private": true,
@@ -8,7 +8,8 @@
     "start": "electron .",
     "server": "node src/server.js",
     "deploy": "node src/deploy-commands.js",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win",
+    "test": "node --test"
   },
   "dependencies": {
     "discord.js": "^14.16.3",

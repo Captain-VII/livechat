@@ -72,13 +72,15 @@ serveur. Permissions minimales : voir les salons, lire l'historique, répondre.
 Crée un salon texte nommé exactement **`livechat`**. Tout ce qui y est posté
 part à l'écran, sans commande.
 
-### 2.6 Enregistrer la commande slash
+### 2.6 Enregistrer les commandes slash
 
 ```bash
 npm run deploy
 ```
 
-À relancer seulement si tu changes la définition de la commande.
+Enregistre `/meme`, `/passer`, `/connectes`, `/file`, `/vider`, `/bannir` et
+`/debannir`. À relancer si tu mets à jour LiveChat vers une version qui ajoute
+des commandes (comme la 2.3.0), ou si tu changes leur définition.
 
 ---
 
@@ -358,6 +360,30 @@ avec le temps qu'il lui reste — pas un plein cycle qui le désynchroniserait d
 autres. Le serveur détecte aussi les connexions mortes en ~15 s au lieu de
 compter sur le système d'exploitation, qui peut mettre plusieurs minutes.
 
+## Voir et modérer la file
+
+`/file` montre, depuis Discord, ce qui est à l'écran et ce qui attend son tour :
+
+> **À l'écran :** Dorian
+> **En attente (3) :**
+> 1. **Alex** — image https://cdn.discordapp.com/…/chat.png
+> 2. **Alex** — video https://cdn.discordapp.com/…/clip.mp4
+> 3. **Camille** — texte il est où le son
+
+Trois commandes réservées à qui a le droit de **gérer les messages** du salon
+(elles n'apparaissent même pas dans le menu Discord des autres) :
+
+- `/vider` — jette tout ce qui attend. Le meme déjà à l'écran va au bout ;
+  `/passer` s'occupe de celui-là.
+- `/bannir @membre` — le prive de LiveChat. Ses messages restent dans Discord,
+  ils ne montent simplement plus à l'écran, que ce soit par `/meme` ou en
+  postant dans le salon.
+- `/debannir @membre` — le remet dans le circuit.
+
+Le bannissement est propre à LiveChat : personne n'est exclu du serveur
+Discord, c'est le travail des modérateurs. La liste est conservée dans
+`.livechat-bannis.json` à côté du serveur, donc elle survit à un redémarrage.
+
 ## Qui est connecté
 
 La commande `/connectes` liste, depuis Discord, qui a son overlay ouvert en ce
@@ -395,13 +421,28 @@ documentée plus bas. Plutôt que de rater tous les memes pendant ce temps-là,
 le client détecte ce cas et bascule tout seul sur l'autre écran, le temps que
 ça dure.
 
-Ça s'appuie sur `SHQueryUserNotificationState`, l'API Windows qui sert
-normalement à couper les notifications pendant un jeu — un petit script
-PowerShell interrogé toutes les 3 secondes, aucun module natif à compiler. La
-détection exige plusieurs sondages d'affilée dans le même sens (~6 s) avant de
-bouger, pour ignorer un état qui vacille, et un choix fait à la main dans le
-sous-menu **Afficher sur** est respecté pendant 20 s avant que la bascule
-automatique ne puisse le reprendre.
+Un petit script PowerShell, interrogé toutes les 3 secondes, aucun module natif
+à compiler. Il croise deux signaux, parce qu'aucun des deux ne suffit seul :
+
+- `SHQueryUserNotificationState`, l'API Windows qui sert normalement à couper
+  les notifications pendant un jeu. Elle ne signale que le plein écran
+  **exclusif DirectX**, que presque aucun jeu récent n'utilise encore.
+- La **géométrie et le style** de la fenêtre au premier plan : sans bordure,
+  non maximisée, et couvrant tout son écran. C'est la signature du « plein
+  écran fenêtré », le mode par défaut de la plupart des jeux aujourd'hui.
+
+Le style compte autant que la taille : une fenêtre simplement **maximisée**
+déborde de l'écran de quelques pixels (Windows l'agrandit de la largeur du
+cadre) et serait sinon confondue avec un jeu — alors que l'overlay se dessine
+très bien par-dessus.
+
+La détection exige plusieurs sondages d'affilée dans le même sens (~6 s) avant
+de bouger, pour ignorer un état qui vacille, puis s'interdit toute nouvelle
+bascule pendant 10 s : beaucoup de jeux font clignoter leur état plein écran
+(overlay Discord/Steam/GeForce, écran de chargement), et sans ce délai
+l'overlay faisait l'aller-retour entre les deux écrans. Un choix fait à la main
+dans le sous-menu **Afficher sur** est respecté pendant 20 s avant que la
+bascule automatique ne puisse le reprendre.
 
 `OVERLAY_AUTO_SWITCH=off` désactive complètement le mécanisme ; la case
 **Basculer seul si plein écran ailleurs** dans le sous-menu **Afficher sur**
@@ -469,7 +510,7 @@ pointer.
 | `OVERLAY_DISPLAY` | `principal` | Écran d'affichage : `principal`, un numéro, ou un bout du nom. |
 | `OVERLAY_VOLUME` | `0.7` | Volume des vidéos, de 0 à 1. |
 | `OVERLAY_AUDIO_DEVICE` | `defaut` | Sortie audio : `defaut`, ou un bout du nom du périphérique. |
-| `OVERLAY_AUTO_SWITCH` | `on` | Bascule sur l'autre écran en cas de plein écran exclusif. `off` pour désactiver. |
+| `OVERLAY_AUTO_SWITCH` | dernier choix du menu | Bascule sur l'autre écran quand un jeu occupe celui-ci. `off` pour désactiver. |
 | `OVERLAY_AUTO_UPDATE` | `on` | Vérifie les mises à jour tout seul (version installée uniquement). `off` pour désactiver. |
 | `OVERLAY_NAME` | pseudo Windows | Nom affiché par `/connectes` côté Discord. |
 
@@ -479,13 +520,28 @@ fenêtre au premier lancement et les sous-menus de l'icône suffisent.
 ## Structure
 
 ```
-src/server.js             bot Discord + file d'attente + serveur websocket
-src/deploy-commands.js    enregistrement de /meme, a lancer a la main
-src/client/main.js        fenetre overlay + connexion au serveur (le .exe)
+src/server.js             bot Discord + serveur websocket
+src/file-memes.js         la file d'attente, isolee pour rester testable
+src/medias.js             reconnaissance des medias + duree reelle d'une video
+src/deploy-commands.js    enregistrement des commandes, a lancer a la main
+
+src/client/main.js        assemblage : fenetre overlay, connexion, menu
+src/client/ecrans.js      choix de l'ecran + bascule auto si plein ecran
+src/client/audio.js       choix de la sortie audio
+src/client/maj.js         mise a jour automatique
+src/client/reglages.js    .env + reglages du menu, conserves entre deux lancements
+src/client/url-serveur.js normalisation de l'adresse collee par un ami
 src/client/preload.cjs    pont overlay <-> processus principal
 src/client/overlay.html   ce qui s'affiche, autonome
 src/client/config.html    fenetre de reglage de l'adresse du serveur
+
+test/                     tests unitaires (npm test)
 ```
+
+Les tests couvrent ce qui casse en silence : le rythme de la file (pause,
+reprise, rattrapage d'un arrivant en cours de route), la lecture de la durée
+d'une vidéo, et la normalisation de l'adresse du serveur. Ils tournent sans
+Discord ni réseau — `npm test`, une seconde.
 
 ## Ça ne marche pas
 
@@ -526,11 +582,17 @@ Discord réponde. Monte `EMBED_WAIT_MS` côté serveur si la connexion traîne.
 **Aucun son du tout** — vérifie « Sortie audio » dans le menu de l'icône, et que
 « Couper le son » n'est pas actif.
 
-**Les memes n'apparaissent jamais alors que je suis en plein écran** — c'est
-peut-être un plein écran *exclusif* (voir plus haut) : normalement la bascule
-automatique t'envoie sur l'autre écran, mais il en faut un second de branché,
-et `OVERLAY_AUTO_SWITCH` ne doit pas être sur `off`. Sans second écran, il n'y
-a nulle part où basculer — reste en plein écran fenêtré pour ce jeu-là.
+**Les memes n'apparaissent jamais alors que je suis en plein écran** — la
+bascule automatique doit t'envoyer sur l'autre écran, mais il en faut un second
+de branché, et `OVERLAY_AUTO_SWITCH` ne doit pas être sur `off`. Sans second
+écran, il n'y a nulle part où basculer — reste en plein écran fenêtré pour ce
+jeu-là.
+
+**L'overlay saute d'un écran à l'autre sans arrêt** — c'était un vrai bug,
+corrigé : la détection lisait la mauvaise valeur de l'API Windows et se croyait
+en plein écran en permanence, si bien qu'elle suivait la fenêtre active au lieu
+du jeu. Si tu vois encore ce comportement, tu es sur une version antérieure à
+la 2.3.0 — mets à jour.
 
 **L'appli ne se met jamais à jour** — la mise à jour automatique ne marche que
 sur une version installée (l'ancien `.exe` portable n'a pas ce mécanisme,
