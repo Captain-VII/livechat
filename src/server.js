@@ -14,7 +14,11 @@ import {
   GatewayIntentBits,
   MessageFlags,
   Partials,
+  PermissionFlagsBits,
 } from 'discord.js';
+
+import { creerFile } from './file-memes.js';
+import { dureeVideoMs, findMediaUrl, mediaDesEmbeds, mediaTypeOf, urlsDe } from './medias.js';
 
 const WALL_CHANNEL = 'livechat';
 
@@ -76,100 +80,52 @@ function ecrireDernieresAnnonces(etat) {
   }
 }
 
-const VIDEO_EXTENSIONS = ['.mp4', '.webm'];
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp'];
-
 // --------------------------------------------------------------------------
-// La file : les memes passent un par un, chacun son moment a l'ecran.
+// Moderation : de quoi couper le robinet a quelqu'un sans l'exclure du serveur
+// Discord. Volontairement limite a LiveChat — bannir pour de vrai reste le
+// travail des moderateurs du serveur.
 // --------------------------------------------------------------------------
 
-/** @type {Array<object>} Memes acceptes, pas encore diffuses. */
-const file = [];
+const BANNIS_PATH = path.join(process.cwd(), '.livechat-bannis.json');
 
-let nextId = 1;
-let minuteur = null;
-let enPause = false;
+/** @type {Set<string>} Identifiants Discord prives de LiveChat. */
+const bannis = new Set(lireBannis());
 
-/**
- * Le meme actuellement a l'ecran, pour rattraper qui se (re)connecte pendant
- * qu'il tourne encore. Sans ca, un accroc reseau d'une seconde suffit a rater
- * un meme pour de bon : rien ne le rejoue jamais.
- * @type {{ meme: object, finPrevue: number } | null}
- */
-let enCours = null;
+function lireBannis() {
+  try {
+    const brut = JSON.parse(fs.readFileSync(BANNIS_PATH, 'utf8'));
+    return Array.isArray(brut) ? brut : [];
+  } catch {
+    return [];
+  }
+}
+
+function ecrireBannis() {
+  try {
+    fs.writeFileSync(BANNIS_PATH, JSON.stringify([...bannis], null, 2));
+  } catch (erreur) {
+    console.warn('[livechat] Impossible de sauvegarder la liste des bannis :', erreur.message);
+  }
+}
+
+/** Moderer LiveChat suit le droit de gerer les messages du salon. */
+function peutModerer(interaction) {
+  return interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages) ?? false;
+}
+
+// La file vit dans son propre module : elle ne sait rien de Discord ni des
+// websockets, on lui passe juste de quoi diffuser et mesurer une video.
+const file = creerFile({
+  dureeMs: DUREE_MS,
+  gapMs: GAP_MS,
+  max: FILE_MAX,
+  dureeVideoMs: (url) => dureeVideoMs(url, DUREE_VIDEO_MAX_MS),
+  diffuser: (message) => diffuser(message),
+  surChangement: () => actualiserMessageControle(),
+});
 
 /** Le message Discord qui porte le bouton "Passer" du meme actuellement affiche. */
 let messageControle = null;
-
-/**
- * Met un meme dans la file. Renvoie le nombre de memes devant lui.
- * Rien n'est fige ici : id et rotation sont decides au moment ou le meme est
- * vraiment diffuse.
- */
-function enfiler(meme) {
-  const devant = file.length;
-  file.push(meme);
-
-  if (file.length > FILE_MAX) {
-    file.shift();
-    console.warn('[livechat] File pleine : le plus vieux meme en attente est passe a la trappe.');
-  }
-
-  relancer();
-  return devant;
-}
-
-/** Reveille la file si elle dort. */
-// Vrai pendant qu'on attend la duree reelle d'une video : relancer() ne doit
-// pas programmer un second defiler() en parallele pendant ce temps-la.
-let sondageEnCours = false;
-
-function relancer() {
-  if (minuteur || sondageEnCours || enPause || file.length === 0) return;
-  minuteur = setTimeout(defiler, 0);
-}
-
-async function defiler() {
-  minuteur = null;
-  if (enPause) return;
-
-  const meme = file.shift();
-  if (!meme) {
-    enCours = null;
-    diffuser({ type: 'retrait' });
-    actualiserMessageControle();
-    return;
-  }
-
-  sondageEnCours = true;
-  const duree = meme.mediaType === 'video' ? ((await dureeVideoMs(meme.mediaUrl)) ?? DUREE_MS) : DUREE_MS;
-  sondageEnCours = false;
-
-  const feuille = {
-    id: nextId++,
-    // Une legere rotation, decidee ici pour que tous les overlays soient d'accord.
-    rotation: Math.round((Math.random() * 4 - 2) * 100) / 100,
-    duree,
-    ...meme,
-  };
-
-  enCours = { meme: feuille, finPrevue: Date.now() + duree };
-  diffuser({ type: 'meme', meme: feuille });
-  actualiserMessageControle();
-  console.log(
-    `[livechat] ${feuille.author.name} -> ${feuille.mediaUrl ?? feuille.text ?? ''} (${duree}ms)`,
-  );
-  minuteur = setTimeout(defiler, duree + GAP_MS);
-}
-
-function passer() {
-  if (minuteur) clearTimeout(minuteur);
-  minuteur = null;
-  enCours = null;
-  diffuser({ type: 'retrait' });
-  actualiserMessageControle();
-  relancer();
-}
 
 /**
  * Poste (ou remplace) le message Discord public qui porte le bouton "Passer"
@@ -180,7 +136,8 @@ function passer() {
  * plus rien a l'ecran.
  */
 async function actualiserMessageControle() {
-  if (!enCours) {
+  const actuel = file.memeEnCours();
+  if (!actuel) {
     if (messageControle) {
       const ancien = messageControle;
       messageControle = null;
@@ -193,11 +150,11 @@ async function actualiserMessageControle() {
     return;
   }
 
-  const contenu = `**${enCours.meme.author.name}** est a l'ecran.`;
+  const contenu = `**${actuel.meme.author.name}** est a l'ecran.`;
   const composants = [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`passer:${enCours.meme.id}`)
+        .setCustomId(`passer:${actuel.meme.id}`)
         .setLabel('Passer')
         .setEmoji('⏭️')
         .setStyle(ButtonStyle.Secondary),
@@ -225,129 +182,6 @@ async function actualiserMessageControle() {
     messageControle = await salon.send({ content: contenu, components: composants });
   } catch (erreur) {
     console.warn('[livechat] Bouton Passer : envoi impossible :', erreur.message);
-  }
-}
-
-// Horodatage du debut de la pause en cours, pour figer le temps restant du
-// meme a l'ecran pendant qu'elle dure (sinon finPrevue - Date.now() continue
-// de s'ecouler alors que rien ne joue).
-let pauseDebut = 0;
-
-function basculerPause() {
-  enPause = !enPause;
-  if (enPause) {
-    if (minuteur) clearTimeout(minuteur);
-    minuteur = null;
-    pauseDebut = Date.now();
-  } else if (enCours) {
-    // Decale finPrevue du temps passe en pause, pour que le meme reprenne
-    // avec le temps qu'il lui restait plutot que de reboucler a zero.
-    enCours.finPrevue += Date.now() - pauseDebut;
-    minuteur = setTimeout(defiler, Math.max(0, enCours.finPrevue - Date.now()) + GAP_MS);
-  } else {
-    relancer();
-  }
-  console.log(`[livechat] ${enPause ? 'En pause.' : 'Reprise.'} ${file.length} en attente.`);
-}
-
-// --------------------------------------------------------------------------
-// Detection du type de media a partir de l'extension de l'URL
-// --------------------------------------------------------------------------
-
-function extensionOf(url) {
-  try {
-    // Les CDN Discord collent des query params signes : on ne garde que le chemin.
-    return path.extname(new URL(url).pathname).toLowerCase();
-  } catch {
-    return '';
-  }
-}
-
-function mediaTypeOf(url, contentType) {
-  if (contentType?.startsWith('video/')) return 'video';
-  if (contentType?.startsWith('image/')) return 'image';
-
-  const ext = extensionOf(url);
-  if (VIDEO_EXTENSIONS.includes(ext)) return 'video';
-  if (IMAGE_EXTENSIONS.includes(ext)) return 'image';
-  return null;
-}
-
-function urlsDe(texte) {
-  return texte?.match(/https?:\/\/\S+/gi) ?? [];
-}
-
-/** Premiere URL du texte qui pointe directement sur une image ou une video. */
-function findMediaUrl(text) {
-  return urlsDe(text).find((url) => mediaTypeOf(url) !== null) ?? null;
-}
-
-/**
- * Cherche un media dans les embeds resolus par Discord. C'est par la qu'arrivent
- * les GIF des selecteurs integres (Klipy, Tenor, Giphy...) : leur lien n'a pas
- * d'extension, seul Discord sait a quel fichier il correspond. On ne code donc
- * aucune liste d'hebergeurs, on lit ce que Discord a trouve.
- */
-function mediaDesEmbeds(embeds) {
-  for (const embed of embeds ?? []) {
-    for (const url of [embed.video?.url, embed.image?.url, embed.thumbnail?.url]) {
-      const mediaType = url ? mediaTypeOf(url) : null;
-      if (mediaType) return { mediaUrl: url, mediaType };
-    }
-  }
-  return null;
-}
-
-// --------------------------------------------------------------------------
-// Duree reelle d'une video : lue dans son conteneur MP4, sans FFmpeg. La boite
-// 'mvhd' contient l'echelle de temps et la duree ; on la cherche d'abord dans
-// les premiers octets du fichier (encodage "streaming"), sinon dans les
-// derniers (encodage classique, ou la table des index arrive a la fin).
-// --------------------------------------------------------------------------
-
-const TAILLE_SONDE_OCTETS = 262144; // 256 Ko : large marge, petite requete.
-
-async function plageOctets(url, range) {
-  const reponse = await fetch(url, { headers: { Range: range }, signal: AbortSignal.timeout(4000) });
-  if (!reponse.ok && reponse.status !== 206) throw new Error(`HTTP ${reponse.status}`);
-  return Buffer.from(await reponse.arrayBuffer());
-}
-
-/** Cherche la boite 'mvhd' dans un extrait de fichier et en tire la duree en secondes. */
-function dureeDepuisMvhd(buf) {
-  const idx = buf.indexOf('mvhd');
-  if (idx === -1) return null;
-  try {
-    const version = buf[idx + 4];
-    if (version === 1) {
-      const timescale = buf.readUInt32BE(idx + 24);
-      const duration = Number(buf.readBigUInt64BE(idx + 28));
-      return timescale > 0 ? duration / timescale : null;
-    }
-    const timescale = buf.readUInt32BE(idx + 16);
-    const duration = buf.readUInt32BE(idx + 20);
-    return timescale > 0 ? duration / timescale : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Duree d'une video en millisecondes, ou null si elle n'a pas pu etre lue (webm, erreur reseau, format inattendu). */
-async function dureeVideoMs(url) {
-  try {
-    const debut = await plageOctets(url, `bytes=0-${TAILLE_SONDE_OCTETS - 1}`);
-    let secondes = dureeDepuisMvhd(debut);
-
-    if (secondes == null) {
-      const fin = await plageOctets(url, `bytes=-${TAILLE_SONDE_OCTETS}`);
-      secondes = dureeDepuisMvhd(fin);
-    }
-
-    if (secondes == null || !Number.isFinite(secondes) || secondes <= 0) return null;
-    return Math.min(Math.round(secondes * 1000), DUREE_VIDEO_MAX_MS);
-  } catch (erreur) {
-    console.warn(`[livechat] Duree de la video illisible (${erreur.message}), duree par defaut utilisee.`);
-    return null;
   }
 }
 
@@ -403,11 +237,9 @@ wss.on('connection', (socket, requete) => {
   // pendant qu'un meme est deja a l'ecran le recoit tout de suite, avec le
   // temps qu'il lui reste plutot qu'un plein 8s qui le desynchroniserait des
   // autres.
-  if (enCours) {
-    const restant = enPause ? enCours.finPrevue - pauseDebut : enCours.finPrevue - Date.now();
-    if (restant > 300) {
-      socket.send(JSON.stringify({ type: 'meme', meme: { ...enCours.meme, duree: restant } }));
-    }
+  const actuel = file.memeEnCours();
+  if (actuel && actuel.restant > 300) {
+    socket.send(JSON.stringify({ type: 'meme', meme: { ...actuel.meme, duree: actuel.restant } }));
   }
 
   // Le protocole websocket repond tout seul aux ping : ca sert surtout au
@@ -432,7 +264,7 @@ wss.on('connection', (socket, requete) => {
     }
     if (message?.type === 'passer') {
       console.log(`[livechat] Passer demande depuis l'overlay (${adresse}).`);
-      passer();
+      file.passer();
     }
   });
 });
@@ -467,6 +299,16 @@ let botPret = false;
 let dejaAnnonce = false;
 let processusTunnel = null;
 
+// Un tunnel qui tombe (coupure reseau, cloudflared qui plante, quota atteint)
+// emportait tout LiveChat avec lui : le serveur continuait de tourner, mais
+// plus personne ne pouvait l'atteindre et rien ne le relancait. On le
+// redemarre donc, en espacant les tentatives pour ne pas marteler Cloudflare.
+const RELANCE_TUNNEL_MIN_MS = 2000;
+const RELANCE_TUNNEL_MAX_MS = 60000;
+let delaiRelanceTunnel = RELANCE_TUNNEL_MIN_MS;
+let arretDemande = false; // vrai a partir du Ctrl+C : plus rien a relancer
+let cloudflaredIntrouvable = false; // inutile de reessayer : le binaire manque
+
 function demarrerTunnel() {
   // Adresse fixe (VPS, domaine derriere nginx...) : pas de tunnel a ouvrir,
   // mais l'annonce automatique dans Discord reste utile telle quelle.
@@ -483,6 +325,10 @@ function demarrerTunnel() {
     return;
   }
 
+  lancerCloudflared();
+}
+
+function lancerCloudflared() {
   console.log('[tunnel] Ouverture d\'un tunnel Cloudflare...');
   processusTunnel = spawn('cloudflared', ['tunnel', '--url', `http://localhost:${PORT}`]);
 
@@ -496,6 +342,9 @@ function demarrerTunnel() {
       const trouve = tampon.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
       if (trouve) {
         urlPublique = trouve[0].replace(/^https:/, 'wss:');
+        // Le tunnel a tenu assez longtemps pour donner une adresse : la
+        // prochaine panne repart d'un delai court.
+        delaiRelanceTunnel = RELANCE_TUNNEL_MIN_MS;
         console.log(`[tunnel] Adresse publique : ${urlPublique}`);
         annoncerSiPret();
       }
@@ -509,6 +358,7 @@ function demarrerTunnel() {
 
   processusTunnel.on('error', (erreur) => {
     if (erreur.code === 'ENOENT') {
+      cloudflaredIntrouvable = true;
       console.error('[tunnel] cloudflared introuvable. Installe-le avec :');
       console.error('[tunnel]   winget install --id Cloudflare.cloudflared');
       console.error("[tunnel] Ou mets AUTO_TUNNEL=none et lance ton propre tunnel a la main.");
@@ -518,9 +368,18 @@ function demarrerTunnel() {
   });
 
   processusTunnel.on('exit', (code) => {
-    if (code !== 0 && code !== null) {
-      console.warn(`[tunnel] cloudflared s'est arrete (code ${code}).`);
-    }
+    processusTunnel = null;
+    if (arretDemande || cloudflaredIntrouvable) return;
+
+    console.warn(`[tunnel] cloudflared s'est arrete (code ${code}). Relance dans ${delaiRelanceTunnel / 1000}s.`);
+
+    // L'adresse d'un tunnel ephemere ne survit pas au processus : la prochaine
+    // sera differente, donc il faudra la re-annoncer dans Discord.
+    urlPublique = null;
+    dejaAnnonce = false;
+
+    setTimeout(lancerCloudflared, delaiRelanceTunnel);
+    delaiRelanceTunnel = Math.min(delaiRelanceTunnel * 2, RELANCE_TUNNEL_MAX_MS);
   });
 }
 
@@ -611,6 +470,12 @@ client.once(Events.ClientReady, async (ready) => {
   annoncerSiPret();
 });
 
+/** Raccourcit un lien ou un texte pour tenir dans une ligne de la file. */
+function apercuCourt(texte) {
+  const propre = (texte ?? '').replace(/\s+/g, ' ').trim();
+  return propre.length > 60 ? `${propre.slice(0, 57)}…` : propre;
+}
+
 /** "3 min", "1 h 12 min"... a partir d'une duree en ms. */
 function dureeLisible(ms) {
   const minutes = Math.max(1, Math.round(ms / 60000));
@@ -622,12 +487,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton()) {
     if (!interaction.customId.startsWith('passer:')) return;
     const idCible = Number(interaction.customId.slice('passer:'.length));
-    if (enCours?.meme.id !== idCible) {
+    if (file.memeEnCours()?.meme.id !== idCible) {
       await interaction.reply({ content: 'Deja passe.', flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.deferUpdate(); // actualiserMessageControle() fera l'edition
-    passer();
+    file.passer();
     return;
   }
 
@@ -651,8 +516,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   if (interaction.commandName === 'passer') {
-    const yAvaitQuelqueChose = enCours !== null;
-    passer();
+    const yAvaitQuelqueChose = file.passer();
     await interaction.reply({
       content: yAvaitQuelqueChose ? 'Meme passe.' : "Rien n'etait a l'ecran.",
       flags: MessageFlags.Ephemeral,
@@ -660,7 +524,96 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.commandName === 'file') {
+    const { enPause, aLEcran, attente } = file.apercu();
+
+    const lignes = [];
+    if (enPause) lignes.push('_(diffusion en pause)_');
+    lignes.push(
+      aLEcran ? `**A l'ecran :** ${aLEcran.author.name}` : "**A l'ecran :** rien pour le moment.",
+    );
+
+    if (attente.length === 0) {
+      lignes.push('**En attente :** rien.');
+    } else {
+      lignes.push(`**En attente (${attente.length}) :**`);
+      // Discord coupe a 2000 caracteres : on montre le debut de la file, qui
+      // est de toute facon la seule partie sur laquelle on peut encore agir.
+      for (const [index, item] of attente.slice(0, 15).entries()) {
+        lignes.push(`${index + 1}. **${item.auteur}** — ${item.type} ${apercuCourt(item.apercu)}`);
+      }
+      if (attente.length > 15) lignes.push(`… et ${attente.length - 15} de plus.`);
+    }
+
+    await interaction.reply({ content: lignes.join('\n'), flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (interaction.commandName === 'vider') {
+    if (!peutModerer(interaction)) {
+      await interaction.reply({
+        content: 'Il faut le droit de gerer les messages pour vider la file.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const combien = file.vider();
+    console.log(`[livechat] File videe (${combien} meme(s)) par ${interaction.user.tag}.`);
+    await interaction.reply({
+      content:
+        combien === 0
+          ? "La file etait deja vide (le meme a l'ecran, lui, va au bout : /passer pour le couper)."
+          : `${combien} meme(s) en attente supprime(s).`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  if (interaction.commandName === 'bannir' || interaction.commandName === 'debannir') {
+    if (!peutModerer(interaction)) {
+      await interaction.reply({
+        content: 'Il faut le droit de gerer les messages pour ca.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const cible = interaction.options.getUser('membre');
+    const bannir = interaction.commandName === 'bannir';
+
+    if (bannir && cible.id === interaction.user.id) {
+      await interaction.reply({
+        content: 'Te bannir toi-meme, vraiment ?',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (bannir) bannis.add(cible.id);
+    else bannis.delete(cible.id);
+    ecrireBannis();
+
+    console.log(
+      `[livechat] ${cible.tag} ${bannir ? 'banni de' : 'reautorise sur'} LiveChat par ${interaction.user.tag}.`,
+    );
+    await interaction.reply({
+      content: bannir
+        ? `**${cible.username}** ne peut plus envoyer de memes sur LiveChat.`
+        : `**${cible.username}** peut de nouveau envoyer des memes.`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   if (interaction.commandName !== 'meme') return;
+
+  if (bannis.has(interaction.user.id)) {
+    await interaction.reply({
+      content: "Tu n'as plus acces a LiveChat.",
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
 
   const fichier = interaction.options.getAttachment('fichier');
   const texte = interaction.options.getString('texte');
@@ -688,7 +641,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  const devant = enfiler({
+  const devant = file.enfiler({
     author: authorOf(interaction.user, interaction.member),
     text: texte ?? null,
     mediaUrl,
@@ -716,7 +669,7 @@ function traiterMessage(message) {
   if (attachments.length > 0) {
     // La legende accompagne la premiere piece jointe seulement.
     attachments.forEach((attachment, index) => {
-      enfiler({
+      file.enfiler({
         author,
         text: index === 0 ? message.content || null : null,
         mediaUrl: attachment.url,
@@ -728,7 +681,7 @@ function traiterMessage(message) {
 
   const mediaUrl = findMediaUrl(message.content);
   if (mediaUrl) {
-    enfiler({
+    file.enfiler({
       author,
       text: message.content.replace(mediaUrl, '').trim() || null,
       mediaUrl,
@@ -743,7 +696,7 @@ function traiterMessage(message) {
   const texteSeul = liens.reduce((t, l) => t.replace(l, ''), message.content).trim() || null;
 
   if (media) {
-    enfiler({ author, text: texteSeul, ...media });
+    file.enfiler({ author, text: texteSeul, ...media });
     return;
   }
 
@@ -756,7 +709,7 @@ function traiterMessage(message) {
   }
 
   if (message.content.trim()) {
-    enfiler({ author, text: message.content.trim(), mediaUrl: null, mediaType: null });
+    file.enfiler({ author, text: message.content.trim(), mediaUrl: null, mediaType: null });
   }
 }
 
@@ -768,7 +721,7 @@ function patienter(message, author, text) {
     attenteEmbed.delete(message.id);
     if (text) {
       // Le lien n'a rien donne, mais il y avait autre chose a dire.
-      enfiler({ author, text, mediaUrl: null, mediaType: null });
+      file.enfiler({ author, text, mediaUrl: null, mediaType: null });
     } else {
       console.warn(`[livechat] Lien sans media utilisable, laisse de cote : ${message.content.trim()}`);
     }
@@ -780,6 +733,7 @@ function patienter(message, author, text) {
 client.on(Events.MessageCreate, (message) => {
   if (message.author.bot) return; // sinon, boucle
   if (message.channel?.name !== WALL_CHANNEL) return;
+  if (bannis.has(message.author.id)) return; // banni de LiveChat : le message reste dans Discord, mais ne passe pas a l'ecran
   traiterMessage(message);
 });
 
@@ -793,7 +747,7 @@ function resoudreEmbed(message) {
 
   clearTimeout(attente.minuteur);
   attenteEmbed.delete(message.id);
-  enfiler({ author: attente.author, text: attente.text, ...media });
+  file.enfiler({ author: attente.author, text: attente.text, ...media });
 }
 
 client.on(Events.MessageUpdate, async (_avant, apres) => {
@@ -810,8 +764,8 @@ client.on(Events.MessageUpdate, async (_avant, apres) => {
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (ligne) => {
   const mot = ligne.trim().toLowerCase();
-  if (mot === 'pause') basculerPause();
-  else if (mot === 'passer') passer();
+  if (mot === 'pause') file.basculerPause();
+  else if (mot === 'passer') file.passer();
 });
 
 if (!process.env.DISCORD_TOKEN) {
@@ -824,9 +778,15 @@ if (!process.env.DISCORD_TOKEN) {
   });
 }
 
-process.on('SIGINT', () => {
+function arreter() {
   console.log('\n[livechat] Arret.');
+  arretDemande = true;
   processusTunnel?.kill();
   client.destroy().catch(() => {});
   process.exit(0);
-});
+}
+
+process.on('SIGINT', arreter);
+// systemd arrete le service avec SIGTERM : sans ce second gestionnaire, on
+// mourait sans tuer cloudflared, qui restait a trainer apres un redemarrage.
+process.on('SIGTERM', arreter);
