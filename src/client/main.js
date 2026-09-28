@@ -20,6 +20,7 @@ import { creerAudio } from './audio.js';
 import { creerEcrans } from './ecrans.js';
 import { demarrerVerificationMaj, verificationEnCours, verifierMajMaintenant } from './maj.js';
 import { ecrireConfig, lireConfig, reglage, reglageActif } from './reglages.js';
+import { demarrerSondeActivite } from './sonde-activite.js';
 import { normaliserUrlServeur } from './url-serveur.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,12 +33,16 @@ const ECRAN_VOULU = (process.env.OVERLAY_DISPLAY ?? '').trim();
 // Sur quelle sortie audio le son part. Vide ou "defaut" : celle de Windows.
 const SORTIE_VOULUE = (process.env.OVERLAY_AUDIO_DEVICE ?? '').trim();
 
-// Bascule tout seul sur un autre ecran quand un jeu ou un film occupe l'ecran
-// choisi. La variable d'environnement prime ; sinon, le dernier choix du menu.
+// Bascule tout seul sur l'autre ecran quand on joue ou regarde un film sur
+// l'ecran principal. La variable d'environnement prime ; sinon, le dernier
+// choix du menu.
 const BASCULE_AUTO_ACTIVE = reglageActif(
   'OVERLAY_AUTO_SWITCH',
   lireConfig().basculeAutoActive ?? true,
 );
+
+// Des jeux que Windows ne reconnait pas comme tels, en plus de la Game Bar.
+const JEUX_PERSO = (process.env.OVERLAY_GAMES ?? '').trim();
 
 // Verifie les mises a jour tout seul, en arriere-plan. 'off' desactive.
 const MAJ_AUTO_ACTIVE = reglageActif('OVERLAY_AUTO_UPDATE', true);
@@ -68,7 +73,11 @@ const ecrans = creerEcrans({
   surChangement: () => majMenu(),
   ecranVouluEnv: ECRAN_VOULU,
   basculeAutoParDefaut: BASCULE_AUTO_ACTIVE,
+  jeuxEnv: JEUX_PERSO,
 });
+
+/** @type {ReturnType<typeof demarrerSondeActivite>|null} */
+let sonde = null;
 
 const audio = creerAudio({
   getFenetre,
@@ -430,7 +439,7 @@ function menuEcrans() {
     })),
     { type: 'separator' },
     {
-      label: 'Basculer seul si plein ecran ailleurs',
+      label: "Basculer seul quand on joue ou regarde un film sur l'ecran principal",
       type: 'checkbox',
       checked: ecrans.basculeAutoActive(),
       click: () => ecrans.basculerBasculeAuto(),
@@ -530,7 +539,7 @@ if (!app.requestSingleInstanceLock()) {
     screen.on('display-removed', ecrans.surChangementEcrans);
     screen.on('display-metrics-changed', ecrans.surChangementEcrans);
 
-    setInterval(ecrans.verifierPleinEcran, 3000).unref();
+    sonde = demarrerSondeActivite({ surSondage: ecrans.surSondage });
 
     demarrerVerificationMaj({ actif: MAJ_AUTO_ACTIVE, surChangement: majMenu });
 
@@ -548,6 +557,7 @@ if (!app.requestSingleInstanceLock()) {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  sonde?.arreter();
   socket?.close();
 });
 

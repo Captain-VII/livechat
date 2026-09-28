@@ -413,41 +413,51 @@ insensible à la casse et plus sûr qu'un numéro, qui change si Windows réordo
 les écrans. Le sous-menu **Afficher sur** de l'icône bascule à chaud, et ce
 choix devient le nouvel écran « préféré ».
 
-### Bascule automatique si tu es en plein écran ailleurs
+### Bascule automatique quand tu joues ou regardes un film
 
-Un jeu ou un film en **plein écran exclusif** empêche n'importe quelle fenêtre
-(donc l'overlay) de se dessiner par-dessus — c'est une limite de Windows, déjà
-documentée plus bas. Plutôt que de rater tous les memes pendant ce temps-là,
-le client détecte ce cas et bascule tout seul sur l'autre écran, le temps que
-ça dure.
+Quand tu joues ou regardes un film sur l'**écran principal** de Windows,
+l'overlay part tout seul sur l'autre écran, puis revient quand c'est fini.
+Pas besoin d'être en plein écran : un jeu en fenêtre ou une vidéo YouTube
+dans un coin de l'écran suffisent. (Un jeu en **plein écran exclusif** empêche
+de toute façon n'importe quelle fenêtre de se dessiner par-dessus — une limite
+de Windows, voir plus bas.)
 
-Un petit script PowerShell, interrogé toutes les 3 secondes, aucun module natif
-à compiler. Il croise deux signaux, parce qu'aucun des deux ne suffit seul :
+Un seul script PowerShell tourne en arrière-plan et décrit l'écran toutes les
+2 secondes, sans module natif à compiler. Ce qui compte comme activité :
 
-- `SHQueryUserNotificationState`, l'API Windows qui sert normalement à couper
-  les notifications pendant un jeu. Elle ne signale que le plein écran
-  **exclusif DirectX**, que presque aucun jeu récent n'utilise encore.
-- La **géométrie et le style** de la fenêtre au premier plan : sans bordure,
-  non maximisée, et couvrant tout son écran. C'est la signature du « plein
-  écran fenêtré », le mode par défaut de la plupart des jeux aujourd'hui.
+- **un jeu**, reconnu à son exécutable : la liste des jeux que connaît la Game
+  Bar de Windows, les dossiers des lanceurs (Steam, Epic, Riot, Xbox, GOG,
+  Ubisoft, EA), ou ta liste perso `OVERLAY_GAMES`. En repli, n'importe quelle
+  fenêtre en plein écran au premier plan (exclusif, ou sans bordure et non
+  maximisée) ;
+- **un film**, reconnu à la lecture annoncée à Windows (celle que pilotent les
+  touches multimédia) par le navigateur ou le lecteur dont la fenêtre est sur
+  l'écran principal. Spotify et les autres applis de musique ne comptent pas.
 
-Le style compte autant que la taille : une fenêtre simplement **maximisée**
-déborde de l'écran de quelques pixels (Windows l'agrandit de la largeur du
-cadre) et serait sinon confondue avec un jeu — alors que l'overlay se dessine
-très bien par-dessus.
+Il faut ~4 s d'activité continue pour partir. Une fois parti, l'overlay reste
+à l'abri tant que la fenêtre du jeu ou du film est sur l'écran principal,
+**même si tu cliques sur l'autre écran** (Discord pendant un film). Un film en
+pause ou un jeu qu'on quitte une minute ne le font pas revenir tout de suite :
+il faut 60 s sans activité. Deux bascules sont toujours espacées d'au moins
+10 s, et un choix fait à la main dans le sous-menu **Afficher sur** est
+respecté pendant 20 s.
 
-La détection exige plusieurs sondages d'affilée dans le même sens (~6 s) avant
-de bouger, pour ignorer un état qui vacille, puis s'interdit toute nouvelle
-bascule pendant 10 s : beaucoup de jeux font clignoter leur état plein écran
-(overlay Discord/Steam/GeForce, écran de chargement), et sans ce délai
-l'overlay faisait l'aller-retour entre les deux écrans. Un choix fait à la main
-dans le sous-menu **Afficher sur** est respecté pendant 20 s avant que la
-bascule automatique ne puisse le reprendre.
+Seul l'écran principal est surveillé : si tu as choisi d'afficher les memes sur
+un autre écran, ils y sont déjà à l'abri et rien ne bouge.
+
+Un jeu que Windows ne reconnaît pas (et que tu joues en fenêtre) :
+ajoute son exe à `OVERLAY_GAMES`, par exemple `OVERLAY_GAMES=Celeste.exe;Hades`,
+ou à la liste `"jeux"` du `config.json` (dans `%APPDATA%\LiveChat`).
+
+Limite connue : les navigateurs annoncent musique et vidéo de la même façon.
+Une musique YouTube qui joue dans une fenêtre sur l'écran principal compte donc
+comme un film.
 
 `OVERLAY_AUTO_SWITCH=off` désactive complètement le mécanisme ; la case
-**Basculer seul si plein écran ailleurs** dans le sous-menu **Afficher sur**
-fait pareil, en cours de soirée. N'a d'effet qu'avec au moins deux écrans
-branchés — sans second écran, il n'y a nulle part où basculer.
+**Basculer seul quand on joue ou regarde un film sur l'écran principal** dans le
+sous-menu **Afficher sur** fait pareil, en cours de soirée (la décocher pendant
+une bascule ramène l'overlay tout de suite). N'a d'effet qu'avec au moins deux
+écrans branchés — sans second écran, il n'y a nulle part où basculer.
 
 ## Choisir la sortie audio (par client)
 
@@ -510,7 +520,8 @@ pointer.
 | `OVERLAY_DISPLAY` | `principal` | Écran d'affichage : `principal`, un numéro, ou un bout du nom. |
 | `OVERLAY_VOLUME` | `0.7` | Volume des vidéos, de 0 à 1. |
 | `OVERLAY_AUDIO_DEVICE` | `defaut` | Sortie audio : `defaut`, ou un bout du nom du périphérique. |
-| `OVERLAY_AUTO_SWITCH` | dernier choix du menu | Bascule sur l'autre écran quand un jeu occupe celui-ci. `off` pour désactiver. |
+| `OVERLAY_AUTO_SWITCH` | dernier choix du menu | Bascule sur l'autre écran quand on joue ou regarde un film sur le principal. `off` pour désactiver. |
+| `OVERLAY_GAMES` | — | Exe à traiter comme des jeux, séparés par `;` (ex. `Celeste.exe;Hades`). |
 | `OVERLAY_AUTO_UPDATE` | `on` | Vérifie les mises à jour tout seul (version installée uniquement). `off` pour désactiver. |
 | `OVERLAY_NAME` | pseudo Windows | Nom affiché par `/connectes` côté Discord. |
 
@@ -526,7 +537,9 @@ src/medias.js             reconnaissance des medias + duree reelle d'une video
 src/deploy-commands.js    enregistrement des commandes, a lancer a la main
 
 src/client/main.js        assemblage : fenetre overlay, connexion, menu
-src/client/ecrans.js      choix de l'ecran + bascule auto si plein ecran
+src/client/ecrans.js      choix de l'ecran + bascule auto
+src/client/activite.js    jeu ou film sur l'ecran principal ? (logique pure, testee)
+src/client/sonde-activite.js  le PowerShell qui decrit l'ecran toutes les 2 s
 src/client/audio.js       choix de la sortie audio
 src/client/maj.js         mise a jour automatique
 src/client/reglages.js    .env + reglages du menu, conserves entre deux lancements
@@ -584,7 +597,9 @@ Discord réponde. Monte `EMBED_WAIT_MS` côté serveur si la connexion traîne.
 
 **Les memes n'apparaissent jamais alors que je suis en plein écran** — la
 bascule automatique doit t'envoyer sur l'autre écran, mais il en faut un second
-de branché, et `OVERLAY_AUTO_SWITCH` ne doit pas être sur `off`. Sans second
+de branché, le jeu doit être sur l'écran **principal**, et `OVERLAY_AUTO_SWITCH`
+ne doit pas être sur `off`. Si ce jeu-là n'est pas reconnu, ajoute son exe à
+`OVERLAY_GAMES`. Sans second
 écran, il n'y a nulle part où basculer — reste en plein écran fenêtré pour ce
 jeu-là.
 
