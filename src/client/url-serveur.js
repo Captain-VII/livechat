@@ -12,7 +12,7 @@
 function hoteSansTls(hote) {
   return (
     hote === 'localhost' ||
-    hote === '::1' ||
+    hote.includes(':') || // IPv6 brute, dont ::1
     /^\d{1,3}(\.\d{1,3}){3}$/.test(hote) ||
     hote.endsWith('.local')
   );
@@ -43,7 +43,10 @@ export function normaliserUrlServeur(brut) {
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(texte)) {
       return { ok: false, erreur: "L'adresse doit commencer par ws:// ou wss://." };
     }
-    const hote = texte.split(/[:/]/)[0].toLowerCase();
+    // Une IPv6 s'ecrit entre crochets : couper sur ":" la mettrait en miettes.
+    const hote = texte.startsWith('[')
+      ? texte.slice(1, texte.indexOf(']')).toLowerCase()
+      : texte.split(/[:/]/)[0].toLowerCase();
     texte = `${hoteSansTls(hote) ? 'ws' : 'wss'}://${texte}`;
   }
 

@@ -30,7 +30,12 @@ export function creerAudio({ getFenetre, surChangement, sortieVoulueEnv }) {
     const voulue = sortieVoulueEnv || lireConfig().sortieAudioLabel || '';
     if (!voulue || /^(defaut|default)$/i.test(voulue)) return null;
 
-    const trouvee = sortiesUtiles().find((s) => s.label?.toLowerCase().includes(voulue.toLowerCase()));
+    // On ecarte l'alias "default" : son libelle ("Default - Haut-parleurs...")
+    // contient celui de la vraie sortie, et le choisir reviendrait a suivre la
+    // sortie par defaut de Windows plutot que le peripherique voulu.
+    const trouvee = sortiesUtiles()
+      .filter((s) => s.deviceId !== 'default')
+      .find((s) => s.label?.toLowerCase().includes(voulue.toLowerCase()));
     if (trouvee) return trouvee.deviceId;
 
     console.warn(`[livechat] Sortie audio voulue ("${voulue}") introuvable.`);

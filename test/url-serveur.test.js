@@ -38,6 +38,10 @@ describe('normaliserUrlServeur', () => {
     assert.equal(url('localhost:8787'), 'ws://localhost:8787');
   });
 
+  it('garde ws:// pour une IPv6 locale sans protocole', () => {
+    assert.equal(url('[::1]:8787'), 'ws://[::1]:8787');
+  });
+
   it('enleve la barre finale', () => {
     assert.equal(url('wss://abc.trycloudflare.com/'), 'wss://abc.trycloudflare.com');
   });

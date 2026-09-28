@@ -530,7 +530,7 @@ if (!app.requestSingleInstanceLock()) {
     screen.on('display-removed', ecrans.surChangementEcrans);
     screen.on('display-metrics-changed', ecrans.surChangementEcrans);
 
-    if (ecrans.ecrans().length > 1) setInterval(ecrans.verifierPleinEcran, 3000).unref();
+    setInterval(ecrans.verifierPleinEcran, 3000).unref();
 
     demarrerVerificationMaj({ actif: MAJ_AUTO_ACTIVE, surChangement: majMenu });
 

@@ -190,14 +190,33 @@ export function creerEcrans({ getFenetre, surChangement, ecranVouluEnv, basculeA
 
   /** Un ecran branche, debranche ou redimensionne : on se recale. */
   function surChangementEcrans() {
-    const actuel = screen.getAllDisplays().find((e) => e.id === ecranChoisiId);
+    const affiches = screen.getAllDisplays();
+
+    // L'ecran "chez soi" est une photo prise au moment du choix : on la
+    // rafraichit, sinon le retour de bascule reposerait l'overlay aux bornes
+    // d'un ecran redimensionne, voire debranche (fenetre invisible).
+    if (ecranPrefere) {
+      const prefere = affiches.find((e) => e.id === ecranPrefere.id);
+      if (!prefere) {
+        console.warn("[livechat] L'ecran prefere a disparu.");
+        ecranBascule = false;
+      }
+      ecranPrefere = prefere ?? null;
+    }
+
+    const actuel = affiches.find((e) => e.id === ecranChoisiId);
     if (actuel) {
+      if (!ecranPrefere) ecranPrefere = actuel; // on adopte l'ecran ou l'on est
       placerSur(actuel, { manuel: false }); // ses bornes ont pu changer
       return;
     }
     console.warn("[livechat] L'ecran choisi a disparu.");
     ecranBascule = false;
-    placerSur(ecranVoulu());
+    // Un repli, pas un choix : on ne l'ecrit pas dans la config, pour retrouver
+    // l'ecran retenu quand il sera rebranche.
+    const repli = ecranVoulu();
+    ecranPrefere = repli;
+    placerSur(repli, { manuel: false });
   }
 
   /** Le HWND de notre propre overlay, en decimal, pour ne pas se detecter soi-meme. */
@@ -213,7 +232,8 @@ export function creerEcrans({ getFenetre, surChangement, ecranVouluEnv, basculeA
   }
 
   async function verifierPleinEcran() {
-    if (!basculeAutoActive) return;
+    // Sonde lancee meme avec un seul ecran : un second peut etre branche plus tard.
+    if (!basculeAutoActive || screen.getAllDisplays().length < 2) return;
 
     let info;
     try {
@@ -301,6 +321,15 @@ export function creerEcrans({ getFenetre, surChangement, ecranVouluEnv, basculeA
   function basculerBasculeAuto() {
     basculeAutoActive = !basculeAutoActive;
     ecrireConfig({ basculeAutoActive });
+    comptePleinEcran = 0;
+    compteRetour = 0;
+
+    // Desactivee en pleine bascule : plus rien ne ramenerait l'overlay, on le
+    // rentre tout de suite a la maison.
+    if (!basculeAutoActive && ecranBascule) {
+      ecranBascule = false;
+      if (ecranPrefere) placerSur(ecranPrefere, { manuel: false });
+    }
     console.log(
       `[livechat] Bascule automatique d'ecran : ${basculeAutoActive ? 'activee' : 'desactivee'}.`,
     );
