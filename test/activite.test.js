@@ -80,17 +80,59 @@ describe('films', () => {
     assert.equal(sessionDe('Chrome', DISCORD), false);
   });
 
+  /** Une lecture dans le navigateur, telle que Brave l'annonce vraiment. */
+  function lecture(titre, artiste, statut = 'Playing') {
+    return [{ app: 'Chrome', statut, type: 'Music', titre, artiste }];
+  }
+  const chrome = (titre) => ({ exe: CHROME, titre: `${titre} - Google Chrome` });
+
   it("reconnait une video dans le navigateur, meme annoncee en Music", () => {
-    const sessions = [{ app: 'Chrome', statut: 'Playing', type: 'Music' }];
-    assert.equal(filmEnLecture(sessions, CHROME), true);
+    const titre = 'VOD // Content Warning - Hugo, Terracid, Potatoz';
+    assert.equal(filmEnLecture(lecture(titre, 'CacaboxTV'), chrome(`${titre} - YouTube`)), true);
+  });
+
+  it('reconnait un live Twitch a la chaine dans le titre de la fenetre', () => {
+    assert.equal(filmEnLecture(lecture('Soiree Among Us !', 'ZeratoR'), chrome('ZeratoR - Twitch')), true);
+  });
+
+  it("fait confiance quand le site n'annonce ni titre ni artiste", () => {
+    assert.equal(filmEnLecture(lecture('', ''), chrome('Netflix')), true);
   });
 
   it('ignore une video en pause', () => {
-    assert.equal(filmEnLecture([{ app: 'Chrome', statut: 'Paused', type: '' }], CHROME), false);
+    assert.equal(filmEnLecture(lecture('Un film', 'Chaine', 'Paused'), chrome('Un film - YouTube')), false);
+  });
+
+  it("ignore la musique d'un onglet en arriere-plan", () => {
+    const sessions = lecture('Lofi hip hop radio - beats to relax/study to', 'Lofi Girl');
+    assert.equal(filmEnLecture(sessions, chrome('Gmail - Boite de reception')), false);
+  });
+
+  it('ignore YouTube Music et les sites de musique', () => {
+    assert.equal(filmEnLecture(lecture('Get Lucky', 'Daft Punk'), chrome('Get Lucky - YouTube Music')), false);
+    assert.equal(filmEnLecture(lecture('Get Lucky', 'Daft Punk'), chrome('Get Lucky - Daft Punk | Deezer')), false);
+  });
+
+  it('ignore une musique sur YouTube, a sa chaine ou a son titre', () => {
+    const topic = 'Get Lucky';
+    assert.equal(filmEnLecture(lecture(topic, 'Daft Punk - Topic'), chrome(`${topic} - YouTube`)), false);
+    const clip = 'Daft Punk - Get Lucky (Official Music Video)';
+    assert.equal(filmEnLecture(lecture(clip, 'Daft Punk'), chrome(`${clip} - YouTube`)), false);
+    const fr = 'Angèle - Balance ton quoi [Clip Officiel]';
+    assert.equal(filmEnLecture(lecture(fr, 'Angèle'), chrome(`${fr} - YouTube`)), false);
+    const paroles = 'Stromae - Alors on danse (Paroles)';
+    assert.equal(filmEnLecture(lecture(paroles, 'Stromae'), chrome(`${paroles} - YouTube`)), false);
+  });
+
+  it("garde un film deja reconnu quand on change d'onglet (strict: false)", () => {
+    const sessions = lecture('Un film', 'Chaine');
+    assert.equal(filmEnLecture(sessions, chrome('Chat - Twitch')), false);
+    assert.equal(filmEnLecture(sessions, chrome('Chat - Twitch'), { strict: false }), true);
   });
 
   it('ignore Spotify', () => {
-    assert.equal(filmEnLecture([{ app: 'Spotify.exe', statut: 'Playing', type: 'Music' }], SPOTIFY), false);
+    const sessions = [{ app: 'Spotify.exe', statut: 'Playing', type: 'Music' }];
+    assert.equal(filmEnLecture(sessions, { exe: SPOTIFY, titre: 'Spotify Premium' }), false);
   });
 });
 
@@ -175,6 +217,15 @@ describe('evaluer', () => {
     const toursDeGrace = DELAI_GRACE_MS / 2000;
     const pauseLongue = derouler([enLecture, enLecture, ...Array(toursDeGrace + 3).fill(enPause)]).actions;
     assert.equal(pauseLongue.includes('revenir'), true);
+  });
+
+  it("reste a l'abri quand on change d'onglet pendant le film", () => {
+    const sessions = [{ app: 'Chrome', statut: 'Playing', type: 'Music', titre: 'Un film', artiste: 'Chaine' }];
+    const film = sondage({ fenetres: [fenetre(3, CHROME, { titre: 'Un film - YouTube - Google Chrome' })], sessions, premier: 3 });
+    const autreOnglet = sondage({ fenetres: [fenetre(3, CHROME, { titre: 'Chat - Twitch - Google Chrome' })], sessions, premier: 3 });
+    const { actions } = derouler([film, film, ...Array(40).fill(autreOnglet)]);
+    assert.equal(actions[1], 'partir');
+    assert.equal(actions.includes('revenir'), false);
   });
 
   it("revient tout de suite si la fenetre du film quitte l'ecran principal", () => {

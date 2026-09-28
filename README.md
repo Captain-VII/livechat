@@ -449,9 +449,21 @@ Un jeu que Windows ne reconnaît pas (et que tu joues en fenêtre) :
 ajoute son exe à `OVERLAY_GAMES`, par exemple `OVERLAY_GAMES=Celeste.exe;Hades`,
 ou à la liste `"jeux"` du `config.json` (dans `%APPDATA%\LiveChat`).
 
-Limite connue : les navigateurs annoncent musique et vidéo de la même façon.
-Une musique YouTube qui joue dans une fenêtre sur l'écran principal compte donc
-comme un film.
+Les navigateurs annoncent musique et vidéo de la même façon. Pour eux, une
+lecture ne compte comme film que si :
+
+- **l'onglet qui joue est celui affiché** — une musique dans un onglet en
+  arrière-plan ne fait rien ;
+- **ce n'est pas un site de musique** (YouTube Music, Spotify, Deezer,
+  SoundCloud…) ;
+- **ça ne ressemble pas à un clip** : chaîne « - Topic » ou VEVO, titre en
+  « Official Music Video », « Official Audio », « Clip officiel », « Lyrics »,
+  « Paroles »…
+
+Une fois l'overlay parti, changer d'onglet (pour lire le chat, par exemple) ne
+le fait pas revenir tant que la vidéo joue. Reste un cas qu'aucun indice ne
+trahit : une musique sans « clip » ni « lyrics » dans son titre, sur une chaîne
+ordinaire, dans l'onglet affiché — celle-là compte encore comme un film.
 
 `OVERLAY_AUTO_SWITCH=off` désactive complètement le mécanisme ; la case
 **Basculer seul quand on joue ou regarde un film sur l'écran principal** dans le

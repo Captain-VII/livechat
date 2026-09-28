@@ -56,6 +56,17 @@ const JAMAIS_JEU = new Set([
 // Des sessions multimedia qui ne sont jamais un film.
 const APPLIS_MUSIQUE = /spotify|itunes|applemusic|zunemusic|deezer|tidal|amazonmusic|soundcloud/i;
 
+// Dans un navigateur, tout s'annonce en "Music", video comprise : on reconnait
+// la musique au site affiche (titre de la fenetre)...
+const SITES_MUSIQUE = /youtube music|spotify|deezer|soundcloud|apple music|tidal|qobuz|bandcamp/i;
+
+// ... a la chaine (les chaines "- Topic" generees par YouTube, VEVO)...
+const ARTISTES_MUSIQUE = /(\s-\s*topic|vevo)$/i;
+
+// ... ou au titre de la video.
+const TITRES_MUSIQUE =
+  /official\s+(music\s+)?video|official\s+audio|official\s+lyric|\blyrics?\b|\bparoles\b|clip\s+officiel|audio\s+officiel|visuali[sz]er|\(audio\)|\[audio\]/i;
+
 // Les navigateurs s'annoncent sous un nom qui n'est pas celui de leur exe.
 const ALIAS_APPLIS = {
   chrome: 'chrome',
@@ -114,23 +125,58 @@ export function sessionDe(appId, exe) {
   return nom.length >= 3 && app.includes(nom);
 }
 
+/** Minuscules, espaces tasses : pour comparer un titre de media a un titre de fenetre. */
+function aplatir(texte) {
+  return (texte ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function estNavigateur(appId) {
+  return ALIAS_APPLIS[(appId ?? '').toLowerCase().split(/[._!]/)[0]] !== undefined;
+}
+
+/** Une lecture de navigateur qui a tout d'une musique. */
+export function ressembleMusique(session, titreFenetre) {
+  return (
+    SITES_MUSIQUE.test(titreFenetre ?? '') ||
+    ARTISTES_MUSIQUE.test((session.artiste ?? '').trim()) ||
+    TITRES_MUSIQUE.test(session.titre ?? '')
+  );
+}
+
 /**
- * Un film en lecture dans ce processus (la musique ne compte pas).
- *
- * Les navigateurs Chromium annoncent TOUT en "Music", video comprise : pour
- * eux le type ne dit rien, et une musique YouTube sur l'ecran principal compte
- * donc comme un film.
+ * L'onglet qui joue est-il celui qu'on voit ? Le titre de la fenetre d'un
+ * navigateur est celui de l'onglet actif : il contient le titre de la video
+ * (YouTube, Netflix) ou le nom de la chaine (Twitch).
  */
-export function filmEnLecture(sessions, exe) {
+export function ongletAffiche(session, titreFenetre) {
+  const fenetre = aplatir(titreFenetre);
+  const titre = aplatir(session.titre);
+  const artiste = aplatir(session.artiste);
+  if (!titre && !artiste) return true; // rien d'annonce : on ne peut pas trancher, on fait confiance
+  return Boolean((titre && fenetre.includes(titre)) || (artiste.length >= 3 && fenetre.includes(artiste)));
+}
+
+/**
+ * Un film en lecture dans cette fenetre (la musique ne compte pas).
+ *
+ * Les navigateurs annoncent TOUT en "Music", video comprise. Pour eux, on
+ * exige que l'onglet qui joue soit celui affiche, et que ca ne ressemble pas a
+ * de la musique (site, chaine, titre). Une musique YouTube dans un onglet en
+ * arriere-plan, ou YouTube Music, ne font donc plus basculer.
+ *
+ * strict: false sert a garder une bascule deja faite : on a vu le film, on ne
+ * le perd pas parce que l'utilisateur change d'onglet pour lire le chat.
+ *
+ * @param {Array<{ app: string, statut: string, type: string, titre?: string, artiste?: string }>} sessions
+ * @param {{ exe: string, titre?: string }} fenetre
+ */
+export function filmEnLecture(sessions, fenetre, { strict = true } = {}) {
   return (sessions ?? []).some((s) => {
     const app = s.app ?? '';
-    const navigateur = ALIAS_APPLIS[app.toLowerCase().split(/[._!]/)[0]] !== undefined;
-    return (
-      s.statut === 'Playing' &&
-      (navigateur || s.type !== 'Music') &&
-      !APPLIS_MUSIQUE.test(app) &&
-      sessionDe(app, exe)
-    );
+    if (s.statut !== 'Playing' || APPLIS_MUSIQUE.test(app) || !sessionDe(app, fenetre.exe)) return false;
+    if (!estNavigateur(app)) return s.type !== 'Music';
+    if (!strict) return true;
+    return ongletAffiche(s, fenetre.titre) && !ressembleMusique(s, fenetre.titre);
   });
 }
 
@@ -159,7 +205,7 @@ export function trouverActivites(sondage, { jeuxConnus, jeuxPerso, pidSoi } = {}
 
     let type = null;
     if (estJeu(f.exe, { jeuxConnus, jeuxPerso })) type = 'jeu';
-    else if (filmEnLecture(sondage.sessions, f.exe)) type = 'film';
+    else if (filmEnLecture(sondage.sessions, f)) type = 'film';
     // Repli pour un jeu inconnu : seulement au premier plan, car des overlays
     // (GeForce, Steam) laissent des fenetres invisibles de la taille de l'ecran.
     else if (f.hwnd === sondage.premier && estPleinEcran(f, sondage.d3d)) type = 'plein-ecran';
@@ -213,8 +259,13 @@ export function evaluer(etat, sondage, { maintenant, enPause = false, ...options
 
   let ancre = etat.ancre;
   if (ancre) {
-    const encore = activites.find((a) => a.hwnd === ancre.hwnd);
     const fenetre = (sondage.fenetres ?? []).find((f) => f.hwnd === ancre.hwnd);
+    // Un film deja reconnu se garde tant qu'il joue, meme si on change d'onglet.
+    const filmContinue =
+      ancre.type === 'film' &&
+      fenetre?.principal &&
+      filmEnLecture(sondage.sessions, fenetre, { strict: false });
+    const encore = activites.find((a) => a.hwnd === ancre.hwnd) ?? (filmContinue ? ancre : null);
     if (encore) ancre = { ...encore, vuTs: maintenant };
     else if (!fenetre?.principal || maintenant - ancre.vuTs >= DELAI_GRACE_MS) ancre = null;
     // Sinon : la fenetre est toujours la, l'activite est suspendue, on patiente.

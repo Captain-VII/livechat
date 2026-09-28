@@ -7,9 +7,10 @@
 // Chaque ligne de sa sortie est un sondage JSON :
 //   premier   le HWND au premier plan
 //   d3d       plein ecran exclusif DirectX, vu par le shell
-//   fenetres  les fenetres visibles : processus, exe, style, ecran principal ou
-//             non, couvre-t-elle son ecran
-//   sessions  les lectures annoncees a Windows (navigateurs, lecteurs, Store)
+//   fenetres  les fenetres visibles : processus, exe, titre, style, ecran
+//             principal ou non, couvre-t-elle son ecran
+//   sessions  les lectures annoncees a Windows (navigateurs, lecteurs, Store),
+//             avec titre et artiste de ce qui joue
 //   jeux      toutes les ~60 s : les exe reconnus comme jeux par la Game Bar
 // --------------------------------------------------------------------------
 
@@ -31,6 +32,7 @@ public class LiveChatFenetre {
   public int Pid { get; set; }
   public string Exe { get; set; }
   public string Classe { get; set; }
+  public string Titre { get; set; }
   public int Style { get; set; }
   public bool Principal { get; set; }
   public bool Couvre { get; set; }
@@ -43,6 +45,7 @@ public static class LiveChatSonde {
   [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
   [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
   [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr hwnd);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, StringBuilder titre, int taille);
   [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out int pid);
   [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
@@ -102,7 +105,8 @@ public static class LiveChatSonde {
     List<LiveChatFenetre> liste = new List<LiveChatFenetre>();
     EnumWindows(delegate (IntPtr h, IntPtr p) {
       if (!IsWindowVisible(h) || IsIconic(h) || GetWindow(h, GW_OWNER) != IntPtr.Zero) return true;
-      if (GetWindowTextLength(h) == 0) return true;
+      int longueurTitre = GetWindowTextLength(h);
+      if (longueurTitre == 0) return true;
       int masquee;
       if (DwmGetWindowAttribute(h, DWMWA_CLOAKED, out masquee, 4) == 0 && masquee != 0) return true;
       RECT r;
@@ -119,6 +123,9 @@ public static class LiveChatSonde {
       f.Pid = pid;
       f.Exe = ExeDe(pid);
       f.Classe = classe.ToString();
+      StringBuilder titre = new StringBuilder(longueurTitre + 1);
+      GetWindowText(h, titre, titre.Capacity);
+      f.Titre = titre.ToString();
       f.Style = GetWindowLong(h, -16);
       f.Principal = (mi.dwFlags & MONITORINFOF_PRIMARY) != 0;
       f.Couvre = r.Left <= mi.rcMonitor.Left && r.Top <= mi.rcMonitor.Top
@@ -145,6 +152,8 @@ try {
   $type = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
   $tache = $asTask.MakeGenericMethod($type).Invoke($null, @($type::RequestAsync()))
   if ($tache.Wait(5000)) { $gestionnaire = $tache.Result }
+  $typeProprietes = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties, Windows.Media.Control, ContentType = WindowsRuntime]
+  $asTaskProprietes = $asTask.MakeGenericMethod($typeProprietes)
 } catch {
   [Console]::Error.WriteLine("Lectures multimedia indisponibles : $($_.Exception.Message)")
 }
@@ -159,10 +168,26 @@ while ($true) {
     try {
       foreach ($s in $gestionnaire.GetSessions()) {
         $infos = $s.GetPlaybackInfo()
+        $statut = [string]$infos.PlaybackStatus
+        # Titre et artiste : de quoi distinguer une video d'une musique dans un
+        # navigateur. Seulement pour ce qui joue, c'est un appel de plus.
+        $titre = ''
+        $artiste = ''
+        if ($statut -eq 'Playing') {
+          try {
+            $tacheProprietes = $asTaskProprietes.Invoke($null, @($s.TryGetMediaPropertiesAsync()))
+            if ($tacheProprietes.Wait(1000)) {
+              $titre = [string]$tacheProprietes.Result.Title
+              $artiste = [string]$tacheProprietes.Result.Artist
+            }
+          } catch {}
+        }
         $lectures += @{
           app = [string]$s.SourceAppUserModelId
-          statut = [string]$infos.PlaybackStatus
+          statut = $statut
           type = [string]$infos.PlaybackType
+          titre = $titre
+          artiste = $artiste
         }
       }
     } catch {}
@@ -208,6 +233,7 @@ function normaliser(brut, jeux) {
       pid: f.Pid,
       exe: f.Exe ?? '',
       classe: f.Classe ?? '',
+      titre: f.Titre ?? '',
       style: f.Style | 0,
       principal: Boolean(f.Principal),
       couvre: Boolean(f.Couvre),
