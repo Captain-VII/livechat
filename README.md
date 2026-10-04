@@ -1,647 +1,382 @@
 # LiveChat
 
 Les memes de la bande, en direct, **par-dessus l'écran de chacun**. Quelqu'un
-balance une image sur Discord, elle s'affiche en grand au milieu de l'écran de
-chacun de ceux qui ont l'overlay ouvert, cinq secondes, puis disparaît. Pas
-d'OBS, pas de FFmpeg, pas de compte à créer côté joueurs.
+poste une image sur Discord : elle s'affiche quelques secondes au milieu de
+l'écran de tous ceux qui ont l'appli ouverte, puis disparaît. Pas d'OBS, pas de
+compte à créer, rien n'est gardé : ce qui n'a pas été vu est raté.
 
-## Deux morceaux
+LiveChat a deux morceaux :
 
-- **Le serveur** (`src/server.js`) — le bot Discord et la file d'attente. Il
-  tourne sur **une seule machine**, celle de l'hôte de la soirée. C'est le seul
-  endroit où le token Discord existe.
-- **Le client** (`src/client/`) — la fenêtre overlay. Chacun le lance chez soi,
-  se connecte au serveur par une adresse, et voit les memes s'afficher sur son
-  propre écran, choisi par lui, en même temps que tout le monde. Aucun token,
-  aucune donnée secrète dedans — c'est lui qui part en `.exe` vers les potes.
+- **le serveur** (`src/server.js`) : le bot Discord et la file d'attente. Il
+  tourne sur **une seule machine**, celle de l'hôte, la seule qui connaisse le
+  token Discord ;
+- **le client** (`src/client/`) : l'overlay, une appli Windows que chacun
+  installe chez soi et relie au serveur par une adresse. Il ne contient aucun
+  secret.
 
-Le serveur ne garde aucun historique : ce qui n'a pas été vu par un client
-connecté à l'instant T est simplement raté. Ephémère par nature, comme avant.
+**Sommaire** — [Pour les joueurs](#pour-les-joueurs) ·
+[Envoyer des memes](#envoyer-des-memes) · [Héberger LiveChat](#héberger-livechat) ·
+[Configuration](#configuration) · [Développement](#développement) ·
+[Dépannage](#dépannage)
 
 ---
 
-## 1. Installation (côté développeur / hôte)
+## Pour les joueurs
+
+### Installer
+
+Télécharge `LiveChat-Setup-<version>.exe` depuis la
+[dernière release](https://github.com/Captain-VII/livechat/releases/latest) et
+lance-le. L'installation est silencieuse, sans droits administrateur, et l'appli
+démarre toute seule à la fin.
+
+Au premier lancement, une fenêtre demande **l'adresse du serveur**, celle que
+l'hôte a postée dans Discord. Colle-la telle quelle : les accents graves du bloc
+de code, un `https://` ou un protocole manquant sont corrigés tout seuls. La
+fenêtre indique si la connexion réussit, puis l'adresse est retenue.
+
+### L'icône de la barre des tâches
+
+L'overlay n'a pas de fenêtre : les clics le traversent. Tout passe par son icône
+dans la barre des tâches, **y compris pour quitter**.
+
+| Entrée | Rôle |
+| --- | --- |
+| Passer ce meme (`Ctrl+Alt+M`) | Coupe le meme en cours, pour tout le monde. |
+| Tester un meme | Affiche un carré de test, pour vérifier l'écran et le son. |
+| Configurer le serveur… | Change l'adresse du serveur. |
+| Couper le son | Coupe le son des vidéos, chez toi seulement. |
+| Sortie audio | Choisit le périphérique de sortie, à chaud. |
+| Afficher sur | Choisit l'écran, et active la bascule automatique. |
+| Indicateur sur l'autre écran | Active la pastille « Livechat en cours » et choisit son coin. |
+| Démarrer avec Windows | Lance LiveChat à l'ouverture de la session. |
+| Vérifier les mises à jour… | Force une vérification immédiate. |
+
+Tous ces choix sont retenus d'un lancement à l'autre.
+
+### Bascule automatique
+
+Quand tu **joues ou regardes un film sur l'écran principal** de Windows,
+l'overlay part tout seul sur ton autre écran, puis revient quand c'est fini. Pas
+besoin d'être en plein écran : un jeu en fenêtre ou une vidéo dans un coin de
+l'écran suffisent.
+
+- **Un jeu** est reconnu à son exécutable : jeux connus de la Game Bar de
+  Windows, jeux installés par Steam, Epic, Riot, Xbox, GOG, Ubisoft ou EA, ou ta
+  liste perso `OVERLAY_GAMES`. Les lanceurs eux-mêmes ne comptent pas. En
+  dernier recours, toute fenêtre en plein écran au premier plan compte aussi.
+- **Un film** est reconnu à la lecture annoncée à Windows (celle que pilotent
+  les touches multimédia) dans un navigateur ou un lecteur, sur l'écran
+  principal. Spotify et les applis de musique ne comptent pas. Dans un
+  navigateur, il faut en plus que l'onglet qui joue soit celui affiché, hors
+  sites de musique (YouTube Music, Deezer…) et hors clips (chaîne « - Topic »
+  ou VEVO, « Official Audio », « Clip officiel », « Lyrics »…).
+
+L'overlay part après ~4 s d'activité. Il reste ensuite à l'abri tant que le jeu
+ou le film continue, **même si tu cliques sur l'autre écran** ou changes
+d'onglet, et revient après la fermeture du jeu ou 60 s de pause. Un choix fait à
+la main dans **Afficher sur** est respecté 20 s.
+
+Seul l'écran principal est surveillé : si les memes s'affichent déjà sur un
+autre écran, rien ne bouge. Il faut au moins deux écrans.
+
+> **Limite :** une musique YouTube dont le titre ne ressemble pas à un clip, sur
+> une chaîne ordinaire, dans l'onglet affiché, compte encore comme un film.
+
+### Indicateur « Livechat en cours »
+
+Pendant qu'un meme s'affiche, une petite pastille discrète « Livechat en cours ·
+pseudo » apparaît sur l'écran qui **n'affiche pas** l'overlay. Utile quand la
+bascule a envoyé les memes à côté : on sait qu'il faut tourner la tête. Elle
+laisse passer les clics, ne prend jamais le focus et disparaît avec le meme. En
+haut à gauche par défaut, réglable dans le menu de l'icône.
+
+### Son
+
+Les vidéos jouent avec le son. **Sortie audio** l'envoie sur le périphérique de
+ton choix : pratique avec une carte son à plusieurs canaux (GoXLR, Voicemeeter)
+pour régler les memes à part du jeu et du micro. L'appli demande la permission
+« média » à Windows uniquement pour lire le nom des périphériques ; elle n'ouvre
+jamais le micro.
+
+### Mises à jour
+
+L'appli vérifie les nouvelles versions 10 s après son lancement, puis toutes les
+6 h. Une mise à jour trouvée se télécharge en silence ; une notification
+prévient, puis l'appli redémarre d'elle-même 15 s plus tard.
+
+---
+
+## Envoyer des memes
+
+**Dans le salon `#livechat`**, tout ce qui est posté part à l'écran : image,
+vidéo, lien direct ou simple texte. Plusieurs pièces jointes donnent plusieurs
+passages.
+
+**Avec `/meme`**, depuis n'importe quel salon, avec au moins une option :
+`fichier`, `texte` ou `lien` (URL directe vers une image ou une vidéo). La
+réponse du bot n'est visible que de toi.
+
+| Contenu | Affichage |
+| --- | --- |
+| `.png` `.jpg` `.gif` `.webp` `.avif` | Image. |
+| `.mp4` `.webm` | Vidéo avec le son, pendant sa durée réelle (60 s au plus). |
+| Texte seul | Affiche : plus le texte est court, plus il est gros. |
+| GIF du sélecteur Discord (Tenor, Giphy, Klipy…) | Marche dans le salon : le serveur attend que Discord résolve le lien. Pas avec `/meme lien:`. |
+
+### Le rythme
+
+**Un meme à la fois**, en même temps sur tous les écrans. Les autres attendent
+leur tour, et le bot répond « Dans la file, 3 devant toi » quand ça bouchonne.
+Au-delà de `QUEUE_MAX` memes en attente, les plus anciens sont abandonnés. Une
+image reste 5 s ; une vidéo joue sa durée réelle.
+
+Un client qui se reconnecte pendant un meme le rattrape avec le temps qu'il lui
+reste, sans se désynchroniser des autres.
+
+### Les commandes
+
+| Commande | Qui | Rôle |
+| --- | --- | --- |
+| `/meme` | Tout le monde | Envoie un meme. |
+| `/passer` | Tout le monde | Coupe le meme en cours, partout. |
+| `/file` | Tout le monde | Montre ce qui est à l'écran et ce qui attend. |
+| `/connectes` | Tout le monde | Liste qui a l'overlay ouvert, et depuis quand. |
+| `/vider` | Modérateurs | Vide la file (le meme à l'écran va au bout). |
+| `/bannir @membre` | Modérateurs | Prive quelqu'un de LiveChat, sans toucher au serveur Discord. |
+| `/debannir @membre` | Modérateurs | Le remet dans le circuit. |
+
+Les commandes de modération sont réservées à qui peut **gérer les messages** du
+salon. La liste des bannis est gardée dans `.livechat-bannis.json`, à côté du
+serveur.
+
+On peut aussi couper un meme avec le bouton **⏭** de l'overlay (survole-le, puis
+clique) ou le bouton **Passer** posté par le bot dans `#livechat`.
+
+---
+
+## Héberger LiveChat
+
+Tout ce qui suit ne concerne que l'hôte.
+
+### 1. Installer
 
 ```bash
 npm install
 cp .env.example .env
 ```
 
-`npm install` télécharge le binaire Electron, environ 250 Mo — nécessaire pour
-lancer le client en développement et construire son `.exe`, pas pour faire
-tourner le serveur seul.
+`npm install` télécharge Electron (~250 Mo), nécessaire seulement pour le
+client. Sur une machine qui ne fait tourner que le serveur :
+`npm install --omit=dev`.
 
-## 2. Configurer le bot Discord
+### 2. Créer le bot Discord
 
-### 2.1 Créer l'application et le bot
+1. Sur le [portail développeur](https://discord.com/developers/applications),
+   crée une application. Copie son **Application ID** dans `DISCORD_CLIENT_ID`.
+2. Onglet **Bot** : **Reset Token**, puis copie le token dans `DISCORD_TOKEN`.
+   Il ne se réaffiche jamais et ne doit jamais être commité.
+3. Toujours dans **Bot**, active **MESSAGE CONTENT INTENT**. **C'est
+   obligatoire** : sans lui, les messages du salon arrivent vides (seul `/meme`
+   marche), et le serveur peut refuser de démarrer avec `Used disallowed intents`.
+4. Lance `npm run server` une fois : la console affiche le lien d'invitation du
+   bot. Ouvre-le et choisis ton serveur Discord.
+5. Crée un salon texte nommé exactement **`livechat`**.
+6. Enregistre les commandes slash :
 
-1. Va sur https://discord.com/developers/applications et clique **New Application**.
-2. Onglet **General Information** : copie l'**Application ID** dans `DISCORD_CLIENT_ID` (fichier `.env`).
-3. Onglet **Bot** : clique **Reset Token**, copie le token dans `DISCORD_TOKEN`.
-   Ce token ne se réaffiche jamais, et il ne se commit nulle part. Il ne vit que
-   sur la machine qui fait tourner `server.js`.
+   ```bash
+   npm run deploy
+   ```
 
-### 2.2 Activer l'intent MESSAGE CONTENT — **obligatoire**
+   À relancer quand une version ajoute ou modifie des commandes.
 
-Onglet **Bot**, section **Privileged Gateway Intents**, active
-**MESSAGE CONTENT INTENT**, puis **Save Changes**.
+> **`DISCORD_GUILD_ID` : choisis une fois pour toutes.** Vide, les commandes
+> sont enregistrées pour tous les serveurs (jusqu'à une heure avant
+> d'apparaître). Rempli, elles le sont pour ce serveur seulement, tout de suite.
+> Ne mélange pas les deux : chaque commande apparaîtrait en double.
 
-C'est la cause numéro 1 de « ça marche pas ». Sans cet intent, le bot voit passer
-les messages du salon mais leur contenu et leurs pièces jointes arrivent vides :
-le mode automatique reste désespérément muet (la commande `/meme`, elle,
-continue de marcher). Si le serveur refuse carrément de démarrer avec une erreur
-`Used disallowed intents`, c'est exactement ça.
-
-### 2.3 Récupérer l'ID du serveur (recommandé)
-
-**Paramètres utilisateur > Avancés > Mode développeur**, puis clic droit sur ton
-serveur Discord > **Copier l'identifiant**. Colle-le dans `DISCORD_GUILD_ID`.
-
-- Rempli : `/meme` est enregistrée sur ce serveur et **disponible immédiatement**.
-- Vide : la commande est enregistrée globalement, avec **jusqu'à une heure** de
-  propagation avant d'apparaître.
-
-### 2.4 Inviter le bot
-
-Lance le serveur une fois (`npm run server`) : l'URL d'invitation est affichée
-dans la console, construite depuis le client ID du bot. Ouvre-la, choisis ton
-serveur. Permissions minimales : voir les salons, lire l'historique, répondre.
-
-### 2.5 Créer le salon
-
-Crée un salon texte nommé exactement **`livechat`**. Tout ce qui y est posté
-part à l'écran, sans commande.
-
-### 2.6 Enregistrer les commandes slash
-
-```bash
-npm run deploy
-```
-
-Enregistre `/meme`, `/passer`, `/connectes`, `/file`, `/vider`, `/bannir` et
-`/debannir`. À relancer si tu mets à jour LiveChat vers une version qui ajoute
-des commandes (comme la 2.3.0), ou si tu changes leur définition.
-
----
-
-## 3. Lancer le serveur (toi, pendant la soirée)
+### 3. Lancer le serveur
 
 ```bash
 npm run server
 ```
 
-La console liste le port d'écoute et confirme la connexion du bot. Aucune
-fenêtre ne s'ouvre — c'est un process en ligne de commande.
+Deux commandes se tapent directement dans ce terminal : `pause` (met la file en
+pause ou la relance ; les memes continuent d'arriver) et `passer`.
 
-Deux commandes tapées directement dans ce terminal, suivies d'Entrée :
+Pour voir les memes toi aussi, lance un client à côté (`npm start`, ou l'appli
+installée) avec l'adresse `ws://localhost:8787`.
 
-- `pause` — met la file en pause (les memes reçus continuent de s'accumuler).
-- `passer` — passe le meme en cours à tous les overlays connectés.
+### 4. Ouvrir le serveur aux autres
 
-### Toi aussi, tu veux voir les memes
-
-Le serveur seul n'affiche rien : lance en plus ton propre client, pointé sur ta
-machine.
-
-```bash
-npm start
-```
-
-Au premier lancement, une petite fenêtre demande l'adresse du serveur — mets
-`ws://localhost:8787` (ou le `PORT` que tu as choisi dans `.env`). Elle n'est
-plus redemandée ensuite.
-
----
-
-## 4. Exposer le serveur à tes potes
-
-Ton PC n'est pas visible depuis internet par défaut. Un **tunnel** ouvre un
-passage temporaire, sans configurer ta box, sans compte payant — et depuis la
-v1.1, **le serveur s'en occupe tout seul** : il ouvre le tunnel au démarrage et
-poste l'adresse dans `#livechat` automatiquement.
-
-### Installer cloudflared (une fois)
+**Le plus simple : le tunnel automatique.** Installe cloudflared une fois :
 
 ```bash
 winget install --id Cloudflare.cloudflared
 ```
 
-C'est tout. Au prochain `npm run server`, le déroulé est :
+À chaque `npm run server`, le serveur ouvre alors un tunnel Cloudflare gratuit et
+poste son adresse (`wss://…trycloudflare.com`) dans `#livechat`. L'adresse
+**change à chaque lancement** ; l'ancienne annonce est supprimée. Si cloudflared
+manque, le serveur le dit dans sa console et continue sans annonce.
 
-1. Le serveur démarre et se connecte à Discord.
-2. Il ouvre un tunnel Cloudflare vers son propre port.
-3. Dès que l'adresse est prête **et** que le bot est connecté, il poste dans
-   `#livechat` :
+Pour gérer le tunnel toi-même (ngrok…), mets `AUTO_TUNNEL=none`, puis donne
+l'adresse du tunnel en remplaçant `https://` par `wss://`.
 
-   > **LiveChat est en ligne.** Colle cette adresse dans l'appli (icône de la
-   > barre des tâches > *Configurer le serveur*) :
-   > ```
-   > wss://quelque-chose-au-hasard.trycloudflare.com
-   > ```
+**Pour une adresse fixe : un VPS.** Le bot tourne alors en continu, même PC
+éteint. Les fichiers de départ sont dans [`deploy/`](deploy/) :
 
-4. Chacun colle cette adresse dans la fenêtre qui s'ouvre au premier lancement
-   de son client (`npm start` en développement, ou le `.exe`).
+1. Un petit VPS avec Node 18+, et un sous-domaine qui pointe dessus
+   (enregistrement DNS A).
+2. Clone le dépôt dans `/opt/livechat`, copie ton `.env` avec **`PUBLIC_URL`**
+   rempli (par ex. `wss://livechat.tondomaine.fr`), puis
+   `npm install --omit=dev`.
+3. [`nginx-livechat.conf`](deploy/nginx-livechat.conf) relaie le HTTPS vers le
+   port du serveur. Crée le certificat avec
+   `certbot certonly --nginx -d livechat.tondomaine.fr`.
+4. [`livechat.service`](deploy/livechat.service) garde le serveur en vie : copie-le
+   dans `/etc/systemd/system/`, puis `systemctl enable --now livechat`.
+5. [`update.sh`](deploy/update.sh) met à jour en une commande (`git pull`,
+   `npm install`, redémarrage).
 
-Cette adresse **change à chaque lancement** du serveur — c'est le principe d'un
-tunnel gratuit sans compte. Le message est donc reposté à chaque démarrage,
-sans que tu aies rien à copier-coller toi-même — et l'annonce précédente est
-supprimée au passage, pour que le salon ne garde jamais qu'une seule adresse
-valide à la fois.
-
-### Réglages (`.env`, section serveur)
-
-| Variable | Défaut | Rôle |
-| --- | --- | --- |
-| `AUTO_TUNNEL` | `cloudflare` | `cloudflare` pour le tunnel automatique, `none` pour le désactiver. Ignoré si `PUBLIC_URL` est rempli. |
-| `PUBLIC_URL` | — | Adresse fixe (VPS, domaine…) : si remplie, pas de tunnel, cette adresse est annoncée telle quelle. |
-| `ANNOUNCE_CHANNEL` | — | Salon où poster l'adresse. Vide : le même que `#livechat`. |
-
-Si `cloudflared` n'est pas installé, le serveur le signale clairement dans sa
-console et continue de tourner normalement — seule l'annonce automatique
-manque, le reste (bot, file d'attente, connexions locales) n'est pas affecté.
-
-### `AUTO_TUNNEL=none` : tunnel manuel ou alternative
-
-Pour piloter le tunnel toi-même (ngrok, un tunnel Cloudflare nommé avec ton
-propre compte, ou un hébergement fixe) :
+### 5. Publier une version du client
 
 ```bash
-AUTO_TUNNEL=none npm run server
-```
-
-Puis, dans un second terminal :
-
-```bash
-ngrok http 8787
-```
-
-Récupère l'adresse générée, remplace `https://` par `wss://`, et donne-la à la
-main dans Discord ou directement à tes potes.
-
-**Limite à connaître, dans tous les cas** : si ton PC s'éteint ou perd le
-réseau, l'overlay de tout le monde s'arrête — c'est ta machine qui fait tourner
-le bot. Pour une soirée où tu es de toute façon devant ton PC, ce n'est en
-général pas un problème. Pour que LiveChat tourne en continu, indépendamment
-de ton PC, voir la section suivante.
-
-### Aller plus loin : héberger sur un VPS (serveur toujours allumé)
-
-Tout ce qui précède suppose que le serveur tourne sur ta machine, allumée
-pendant que vos potes jouent. Un petit VPS (OVH, Scaleway, Hetzner…) enlève
-cette contrainte : le bot et la file de memes tournent en continu, avec une
-**adresse fixe** qui ne change plus jamais — plus de tunnel, plus d'adresse à
-reposter dans Discord à chaque démarrage.
-
-Grandes lignes (fichiers de départ dans [`deploy/`](deploy/)) :
-
-1. **VPS + domaine** : le plus petit VPS Node-compatible suffit (LiveChat est
-   très léger, il n'affiche rien lui-même). Pointe un sous-domaine dessus,
-   par ex. `livechat.tondomaine.fr` (enregistrement DNS de type A vers l'IP
-   du VPS).
-2. **Node et le dépôt** : installe Node 18+ sur le VPS, clone ce dépôt dans
-   `/opt/livechat`, copie ton `.env` avec **`PUBLIC_URL`** rempli (l'adresse
-   fixe — `wss://livechat.tondomaine.fr` avec nginx+domaine, ou directement
-   `ws://IP:8787` en attendant — plus besoin de tunnel, et l'adresse est quand
-   même annoncée une fois dans Discord au démarrage), puis
-   `npm install --omit=dev` (`--omit=dev` évite de télécharger Electron,
-   inutile côté serveur).
-3. **nginx + certbot** : [`deploy/nginx-livechat.conf`](deploy/nginx-livechat.conf)
-   fait le relais HTTPS vers le port local du serveur (`8787` par défaut) —
-   c'est lui qui expose le port 443, jamais le serveur Node directement.
-   Génère le certificat avec `certbot certonly --nginx -d livechat.tondomaine.fr`
-   avant d'activer le bloc HTTPS du fichier.
-4. **systemd** : [`deploy/livechat.service`](deploy/livechat.service) garde le
-   serveur en vie (redémarrage automatique en cas de plantage, démarrage au
-   boot du VPS). Copie-le dans `/etc/systemd/system/`, puis
-   `systemctl enable --now livechat`.
-5. **Mises à jour** : [`deploy/update.sh`](deploy/update.sh) fait `git pull` +
-   `npm install` + redémarre le service en une commande.
-
-Une fois en place, l'adresse à donner à tes potes (et dans `SERVER_URL` côté
-client) devient `wss://livechat.tondomaine.fr` — fixe, à ne plus jamais
-retaper. `DISCORD_TOKEN` vit alors sur le VPS plutôt que sur ta machine : à
-traiter avec les mêmes précautions (fichier `.env`, jamais commité).
-
----
-
-## 5. Construire et distribuer le client
-
-```bash
+npm version 2.5.1 --no-git-tag-version
 npm run dist
 ```
 
-Produit un petit installeur dans `dist/` :
-
-- `LiveChat-Setup-<version>.exe` — l'installeur, ~110 Mo (le runtime Electron,
-  incompressible). Double-clic, installation silencieuse en quelques secondes
-  dans `%LOCALAPPDATA%\Programs\LiveChat\` (pas besoin d'être admin), l'appli se
-  lance toute seule à la fin.
-- `latest.yml` et `LiveChat-Setup-<version>.exe.blockmap` — les fichiers dont la
-  **mise à jour automatique** a besoin pour savoir qu'une nouvelle version
-  existe. Sans eux, l'app continue de tourner mais ne se met jamais à jour.
-
-Ce n'est plus un `.exe` portable : le passage à un vrai (petit) installeur est
-ce qui rend possibles la mise à jour automatique et le démarrage avec Windows
-— un portable s'auto-extrait dans un dossier temporaire différent à chaque
-lancement, un chemin qui change tout le temps ne peut servir de point d'ancrage
-à rien de durable.
-
-### Distribution par GitHub Releases
-
-```bash
-git tag v2.0.0
-git push origin v2.0.0
-```
-
-Sur la page GitHub du dépôt : **Releases > Draft a new release**, choisis le
-tag, glisse **les trois fichiers** de `dist/` (le Setup, le `.yml`, le
-`.blockmap`) dans les fichiers joints, publie. `package.json` pointe déjà vers
-ce dépôt (`build.publish`), donc electron-updater sait où chercher sans rien
-configurer de plus.
-
-**Si tes potes ont déjà l'ancien `.exe` portable (v1.0.0)** : il n'a pas la
-mise à jour automatique intégrée, elle ne peut pas se déclencher toute seule
-pour eux. Ils doivent retélécharger et relancer une fois l'installeur
-manuellement ; à partir de là, les mises à jour suivantes seront automatiques.
-
-**Si tes potes ont une version « Le mur » installée (avant la v2.0.0)** : le
-projet s'appelait encore comme ça. Le renommage en LiveChat change le dossier
-d'installation et le dossier de configuration — comme pour le portable
-ci-dessus, la mise à jour automatique ne peut pas migrer toute seule d'une
-appli vers une autre. Chacun doit retélécharger et relancer l'installeur
-`LiveChat-Setup-2.0.0.exe` une fois (l'ancienne « Le mur » peut être
-désinstallée séparément, elle ne sera pas remplacée automatiquement), et
-recoller l'adresse du serveur dans la fenêtre qui s'ouvre au premier
-lancement. À partir de là, les mises à jour suivantes seront automatiques,
-comme avant.
-
-### Ce que voit un ami qui lance l'installeur
-
-Rien à configurer à l'avance. Au premier lancement, une fenêtre demande
-l'adresse du serveur — celle que tu leur as donnée dans Discord, en `wss://`.
-Elle dit clairement si la connexion a réussi (et se ferme toute seule) ou si
-ça bloque après plusieurs tentatives. Une fois validée, l'adresse est
-mémorisée : les lancements suivants s'y connectent tout seuls.
-
-L'icône dans la barre des tâches permet de changer d'adresse, de choisir
-l'écran et la sortie audio, de couper le son, de passer un meme, d'activer le
-démarrage avec Windows.
-
-**Pour quitter, c'est par cette icône.** Il n'y a pas de fenêtre à fermer,
-l'overlay est traversé par les clics — c'est le principe même d'un overlay.
+`dist/` contient alors l'installeur (~110 Mo), son `.blockmap` et `latest.yml`.
+Commite la nouvelle version, crée le tag (`git tag v2.5.1`, puis
+`git push origin master v2.5.1`), puis publie une release GitHub sur ce tag avec
+**les trois fichiers**. Sans `latest.yml` et le `.blockmap`, les clients ne
+voient pas la mise à jour.
 
 ---
 
-## Utilisation (côté Discord, inchangée)
-
-**Mode soirée (le principal)** : poste n'importe quoi dans `#livechat`.
-Image, vidéo, lien direct, ou juste du texte. Plusieurs pièces jointes dans un
-même message donnent plusieurs passages à l'écran.
-
-**Commande** : `/meme` avec au moins une des trois options —
-`fichier` (pièce jointe), `texte` (légende ou texte seul), `lien` (URL directe
-vers une image ou une vidéo). Les trois vides : réponse d'erreur visible de toi
-seul. La réponse du bot est toujours éphémère, pour ne pas polluer le salon.
-
-Les `.mp4` et `.webm` sont joués en boucle **avec le son** pendant leur passage.
-Le reste (`.png`, `.jpg`, `.gif`, `.webp`, `.avif`) en image. Un meme sans image
-devient une affiche : plus le texte est court, plus il est gros.
-
-**Les GIF du sélecteur Discord marchent aussi** (Klipy, Tenor, Giphy…). Leur lien
-n'a pas d'extension — `https://klipy.com/gifs/greetings-PSr` ne dit pas à quel
-fichier il correspond. C'est Discord qui le résout, une fraction de seconde après
-l'envoi : le serveur attend cet embed (`EMBED_WAIT_MS`, 6 s par défaut) au lieu
-d'afficher l'URL en toutes lettres. Aucun hébergeur n'est codé en dur, donc ceux
-qui apparaîtront demain marcheront aussi.
-
-Un lien qui ne donne rien au bout du délai est laissé de côté, avec un mot dans
-la console. S'il y avait une phrase à côté du lien, c'est elle qui s'affiche.
-
-Un GIF n'a pas de son : c'est normal, un GIF est muet par définition. Le son ne
-concerne que les vraies vidéos.
-
-## Le rythme
-
-**Un meme à la fois**, sur tous les overlays connectés en même temps. Chacun a
-l'écran pour lui, les autres attendent leur tour. Une rafale de huit images ne
-repeint pas l'écran d'un bloc : ça défile. Le bot répond
-`Dans la file, 3 devant toi.` quand ça bouchonne, et au-delà de `QUEUE_MAX`
-memes en attente, les plus vieux sont abandonnés — sinon un plaisantin condamne
-la soirée à regarder son dossier d'images pendant dix minutes. C'est le serveur
-qui tient l'horloge : le rythme est identique pour tout le monde, quel que soit
-le nombre de clients connectés.
-
-**Les images et les textes** restent affichés `OVERLAY_DURATION_MS` (5 s par
-défaut). **Les vidéos jouent leur durée réelle** : un clip de 3 s ne traîne pas
-inutilement, un clip de 20 s n'est pas coupé au milieu. C'est lu directement
-dans le fichier (la boîte `mvhd` d'un MP4, sans FFmpeg), plafonné à
-`OVERLAY_VIDEO_MAX_MS` (60 s par défaut) pour qu'un pote ne puisse pas
-monopoliser LiveChat avec un film entier. Si la durée ne peut pas être lue (une
-poignée de formats particuliers, ou un souci réseau passager), la vidéo retombe
-sur `OVERLAY_DURATION_MS` comme avant.
-
-**Couper un meme trop long** : quatre façons, équivalentes.
-
-- Le bouton **⏭** directement sur l'overlay, en haut à droite du meme affiché —
-  survole-le puis clique, sans quitter le jeu.
-- Le bouton **Passer** posté par le bot sous le message qui annonce le meme en
-  cours dans `#livechat`, utilisable par tout le monde.
-- Depuis l'appli — l'icône de la barre des tâches, **Passer ce meme**, ou le
-  raccourci `Ctrl+Alt+M`. Marche pour n'importe qui a l'overlay ouvert.
-- Depuis Discord — la commande `/passer`, utilisable par tout le monde dans le
-  salon.
-
-Toutes font la même chose : le meme s'efface tout de suite, sur tous les
-écrans connectés, et le suivant dans la file prend le relais.
-
-**En cas d'accroc réseau** (tunnel qui tousse, wifi qui coupe une seconde), un
-client qui se reconnecte pendant qu'un meme est à l'écran le rattrape aussitôt,
-avec le temps qu'il lui reste — pas un plein cycle qui le désynchroniserait des
-autres. Le serveur détecte aussi les connexions mortes en ~15 s au lieu de
-compter sur le système d'exploitation, qui peut mettre plusieurs minutes.
-
-## Voir et modérer la file
-
-`/file` montre, depuis Discord, ce qui est à l'écran et ce qui attend son tour :
-
-> **À l'écran :** Dorian
-> **En attente (3) :**
-> 1. **Alex** — image https://cdn.discordapp.com/…/chat.png
-> 2. **Alex** — video https://cdn.discordapp.com/…/clip.mp4
-> 3. **Camille** — texte il est où le son
-
-Trois commandes réservées à qui a le droit de **gérer les messages** du salon
-(elles n'apparaissent même pas dans le menu Discord des autres) :
-
-- `/vider` — jette tout ce qui attend. Le meme déjà à l'écran va au bout ;
-  `/passer` s'occupe de celui-là.
-- `/bannir @membre` — le prive de LiveChat. Ses messages restent dans Discord,
-  ils ne montent simplement plus à l'écran, que ce soit par `/meme` ou en
-  postant dans le salon.
-- `/debannir @membre` — le remet dans le circuit.
-
-Le bannissement est propre à LiveChat : personne n'est exclu du serveur
-Discord, c'est le travail des modérateurs. La liste est conservée dans
-`.livechat-bannis.json` à côté du serveur, donc elle survit à un redémarrage.
-
-## Qui est connecté
-
-La commande `/connectes` liste, depuis Discord, qui a son overlay ouvert en ce
-moment et depuis combien de temps :
-
-> **2 overlay(s) connecté(s) :**
-> • **Dorian** — connecté depuis 12 min
-> • **Alex** — connecté depuis 3 min
-
-Chaque client s'identifie par son pseudo Windows par défaut — rien à
-configurer. `OVERLAY_NAME` (variable du client) permet d'en choisir un autre,
-plus parlant que le nom de session Windows.
-
-## Choisir l'écran (par client)
-
-Chacun choisit son propre écran, indépendamment des autres. Au démarrage, la
-console liste les écrans détectés :
-
-```
-[livechat] Ecrans detectes (numero a mettre dans OVERLAY_DISPLAY) :
-[livechat]   1. MAG 274Q X24 - 2560x1440 (principal)  <-- les memes s'affichent ici
-[livechat]   2. MAG 274QF X24 - 1440x2560
-```
-
-`OVERLAY_DISPLAY` accepte `principal` (ou vide), un numéro, ou un bout du nom —
-insensible à la casse et plus sûr qu'un numéro, qui change si Windows réordonne
-les écrans. Le sous-menu **Afficher sur** de l'icône bascule à chaud, et ce
-choix devient le nouvel écran « préféré ».
-
-### Bascule automatique quand tu joues ou regardes un film
-
-Quand tu joues ou regardes un film sur l'**écran principal** de Windows,
-l'overlay part tout seul sur l'autre écran, puis revient quand c'est fini.
-Pas besoin d'être en plein écran : un jeu en fenêtre ou une vidéo YouTube
-dans un coin de l'écran suffisent. (Un jeu en **plein écran exclusif** empêche
-de toute façon n'importe quelle fenêtre de se dessiner par-dessus — une limite
-de Windows, voir plus bas.)
-
-Un seul script PowerShell tourne en arrière-plan et décrit l'écran toutes les
-2 secondes, sans module natif à compiler. Ce qui compte comme activité :
-
-- **un jeu**, reconnu à son exécutable : la liste des jeux que connaît la Game
-  Bar de Windows, les dossiers des lanceurs (Steam, Epic, Riot, Xbox, GOG,
-  Ubisoft, EA), ou ta liste perso `OVERLAY_GAMES`. En repli, n'importe quelle
-  fenêtre en plein écran au premier plan (exclusif, ou sans bordure et non
-  maximisée) ;
-- **un film**, reconnu à la lecture annoncée à Windows (celle que pilotent les
-  touches multimédia) par le navigateur ou le lecteur dont la fenêtre est sur
-  l'écran principal. Spotify et les autres applis de musique ne comptent pas.
-
-Il faut ~4 s d'activité continue pour partir. Une fois parti, l'overlay reste
-à l'abri tant que la fenêtre du jeu ou du film est sur l'écran principal,
-**même si tu cliques sur l'autre écran** (Discord pendant un film). Un film en
-pause ou un jeu qu'on quitte une minute ne le font pas revenir tout de suite :
-il faut 60 s sans activité. Deux bascules sont toujours espacées d'au moins
-10 s, et un choix fait à la main dans le sous-menu **Afficher sur** est
-respecté pendant 20 s.
-
-Seul l'écran principal est surveillé : si tu as choisi d'afficher les memes sur
-un autre écran, ils y sont déjà à l'abri et rien ne bouge.
-
-Un jeu que Windows ne reconnaît pas (et que tu joues en fenêtre) :
-ajoute son exe à `OVERLAY_GAMES`, par exemple `OVERLAY_GAMES=Celeste.exe;Hades`,
-ou à la liste `"jeux"` du `config.json` (dans `%APPDATA%\LiveChat`).
-
-Les navigateurs annoncent musique et vidéo de la même façon. Pour eux, une
-lecture ne compte comme film que si :
-
-- **l'onglet qui joue est celui affiché** — une musique dans un onglet en
-  arrière-plan ne fait rien ;
-- **ce n'est pas un site de musique** (YouTube Music, Spotify, Deezer,
-  SoundCloud…) ;
-- **ça ne ressemble pas à un clip** : chaîne « - Topic » ou VEVO, titre en
-  « Official Music Video », « Official Audio », « Clip officiel », « Lyrics »,
-  « Paroles »…
-
-Une fois l'overlay parti, changer d'onglet (pour lire le chat, par exemple) ne
-le fait pas revenir tant que la vidéo joue. Reste un cas qu'aucun indice ne
-trahit : une musique sans « clip » ni « lyrics » dans son titre, sur une chaîne
-ordinaire, dans l'onglet affiché — celle-là compte encore comme un film.
-
-`OVERLAY_AUTO_SWITCH=off` désactive complètement le mécanisme ; la case
-**Basculer seul quand on joue ou regarde un film sur l'écran principal** dans le
-sous-menu **Afficher sur** fait pareil, en cours de soirée (la décocher pendant
-une bascule ramène l'overlay tout de suite). N'a d'effet qu'avec au moins deux
-écrans branchés — sans second écran, il n'y a nulle part où basculer.
-
-### Indicateur « livechat en cours » sur l'autre écran
-
-Pendant qu'un meme s'affiche, une petite pastille discrète apparaît sur
-**l'autre écran** que celui de l'overlay : « Livechat en cours · pseudo ». C'est
-surtout utile quand la bascule automatique a envoyé les memes à côté pendant un
-film ou une partie — sans elle, on ne sait pas qu'il faut tourner la tête.
-
-Elle est traversée par les clics et ne prend jamais le focus. Elle disparaît
-avec le meme. Le sous-menu **Indicateur sur l'autre écran** de l'icône permet
-de la désactiver et de choisir son coin (en haut à gauche par défaut) ; les
-deux choix sont retenus d'un lancement à l'autre. N'apparaît qu'avec au moins
-deux écrans.
-
-## Choisir la sortie audio (par client)
-
-Même logique pour le son : `OVERLAY_AUDIO_DEVICE` prend un bout du nom du
-périphérique, listé au démarrage. Pratique avec une carte son à plusieurs
-canaux (GoXLR, Voicemeeter) pour régler les memes indépendamment du jeu et du
-micro. Le sous-menu **Sortie audio** de l'icône bascule à chaud, même pendant
-qu'une vidéo joue. L'application demande la permission « média » à Chromium au
-démarrage — c'est ce qui débloque le nom des périphériques ; elle n'ouvre jamais
-le micro.
-
-## Mise à jour automatique
-
-Une fois installée (pas en portable — voir plus haut), l'appli vérifie la
-dernière version publiée sur GitHub Releases 10 s après le démarrage, puis
-toutes les 6 h si elle reste ouverte plusieurs jours. Si une nouvelle version
-est trouvée, elle se télécharge en silence et s'installe au redémarrage
-suivant de l'appli, sans rien demander.
-
-`OVERLAY_AUTO_UPDATE=off` désactive la vérification. Ça ne concerne que le
-client — le serveur (`src/server.js`) n'a pas de mécanisme de mise à jour, tu
-le mets à jour toi-même avec `git pull`.
-
-L'icône affiche la version installée (**Version x.y.z**, ligne grisée) et un
-bouton **Vérifier les mises à jour...** pour forcer un contrôle immédiat sans
-attendre le prochain cycle de 6h — utile si tu sais qu'une release vient de
-sortir. Une notification Windows confirme dans tous les cas (déjà à jour,
-mise à jour trouvée, ou vérification impossible).
-
-## Démarrer avec Windows
-
-L'icône propose une case **Démarrer avec Windows**, qui ajoute (ou retire)
-l'appli du démarrage automatique de la session — via
-`app.setLoginItemSettings`, la même mécanique que n'importe quelle appli
-Windows légitime, sans dépendance de plus. Disponible uniquement sur une
-version installée : en développement, il n'y a pas de chemin stable vers quoi
-pointer.
-
 ## Configuration
 
-### Serveur (`.env` sur la machine de l'hôte)
+Toutes les variables sont facultatives sauf mention contraire. Elles se
+mettent dans le `.env`. Un joueur qui a juste installé l'appli n'a besoin
+d'aucune : la fenêtre du premier lancement et le menu de l'icône suffisent.
+
+### Serveur
 
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
-| `DISCORD_TOKEN` | — | Token du bot. Requis. |
-| `DISCORD_CLIENT_ID` | — | Application ID. Requis pour `npm run deploy`. |
-| `DISCORD_GUILD_ID` | — | Facultatif. Enregistrement instantané de la commande sur ce serveur. |
-| `PORT` | `8787` | Port d'écoute, celui que le tunnel expose. |
-| `OVERLAY_DURATION_MS` | `5000` | Temps d'affichage d'un meme. |
-| `OVERLAY_GAP_MS` | `500` | Respiration entre deux memes. |
-| `QUEUE_MAX` | `40` | Taille max de la file d'attente. |
-| `EMBED_WAIT_MS` | `6000` | Délai laissé à Discord pour résoudre le lien d'un GIF. |
-| `OVERLAY_VIDEO_MAX_MS` | `60000` | Durée maximale d'une vidéo, même si elle dure plus longtemps. |
+| `DISCORD_TOKEN` | — | Token du bot. **Requis.** |
+| `DISCORD_CLIENT_ID` | — | Application ID. **Requis** pour `npm run deploy`. |
+| `DISCORD_GUILD_ID` | — | Enregistre les commandes sur ce serveur seulement (voir plus haut). |
+| `PORT` | `8787` | Port d'écoute. |
+| `AUTO_TUNNEL` | `cloudflare` | `none` pour désactiver le tunnel automatique. |
+| `PUBLIC_URL` | — | Adresse fixe à annoncer, sans tunnel (VPS). |
+| `ANNOUNCE_CHANNEL` | `livechat` | Salon où poster l'adresse. |
+| `OVERLAY_DURATION_MS` | `5000` | Durée d'affichage d'une image ou d'un texte. |
+| `OVERLAY_GAP_MS` | `500` | Pause entre deux memes. |
+| `OVERLAY_VIDEO_MAX_MS` | `60000` | Durée maximale d'une vidéo. |
+| `QUEUE_MAX` | `40` | Taille maximale de la file. |
+| `EMBED_WAIT_MS` | `6000` | Temps laissé à Discord pour résoudre un lien de GIF. |
 
-### Client (par machine qui affiche l'overlay)
+### Client
+
+Les variables priment sur les choix faits dans le menu.
 
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
-| `SERVER_URL` | — | Adresse du serveur. Sinon demandée au premier lancement. |
-| `OVERLAY_DISPLAY` | `principal` | Écran d'affichage : `principal`, un numéro, ou un bout du nom. |
+| `SERVER_URL` | — | Adresse du serveur. Sinon, demandée au premier lancement. |
+| `OVERLAY_DISPLAY` | `principal` | Écran : `principal`, un numéro, ou un bout de son nom. |
 | `OVERLAY_VOLUME` | `0.7` | Volume des vidéos, de 0 à 1. |
 | `OVERLAY_AUDIO_DEVICE` | `defaut` | Sortie audio : `defaut`, ou un bout du nom du périphérique. |
-| `OVERLAY_AUTO_SWITCH` | dernier choix du menu | Bascule sur l'autre écran quand on joue ou regarde un film sur le principal. `off` pour désactiver. |
+| `OVERLAY_AUTO_SWITCH` | dernier choix du menu | `off` pour désactiver la bascule automatique. |
 | `OVERLAY_GAMES` | — | Exe à traiter comme des jeux, séparés par `;` (ex. `Celeste.exe;Hades`). |
-| `OVERLAY_AUTO_UPDATE` | `on` | Vérifie les mises à jour tout seul (version installée uniquement). `off` pour désactiver. |
-| `OVERLAY_NAME` | pseudo Windows | Nom affiché par `/connectes` côté Discord. |
+| `OVERLAY_AUTO_UPDATE` | `on` | `off` pour désactiver les mises à jour automatiques. |
+| `OVERLAY_NAME` | pseudo Windows | Nom affiché par `/connectes`. |
 
-Un ami qui lance l'installeur sans `.env` n'a besoin de rien de tout ça : la
-fenêtre au premier lancement et les sous-menus de l'icône suffisent.
+Les choix du menu sont gardés dans `%APPDATA%\LiveChat\config.json`. On peut y
+ajouter une liste `"jeux"`, au même format que `OVERLAY_GAMES`.
 
-## Structure
+---
 
-```
-src/server.js             bot Discord + serveur websocket
-src/file-memes.js         la file d'attente, isolee pour rester testable
-src/medias.js             reconnaissance des medias + duree reelle d'une video
-src/deploy-commands.js    enregistrement des commandes, a lancer a la main
+## Développement
 
-src/client/main.js        assemblage : fenetre overlay, connexion, menu
-src/client/ecrans.js      choix de l'ecran + bascule auto
-src/client/activite.js    jeu ou film sur l'ecran principal ? (logique pure, testee)
-src/client/sonde-activite.js  le PowerShell qui decrit l'ecran toutes les 2 s
-src/client/indicateur.js  pastille "livechat en cours" sur l'autre ecran
-src/client/coins.js       position de la pastille selon le coin choisi (teste)
-src/client/audio.js       choix de la sortie audio
-src/client/maj.js         mise a jour automatique
-src/client/reglages.js    .env + reglages du menu, conserves entre deux lancements
-src/client/url-serveur.js normalisation de l'adresse collee par un ami
-src/client/preload.cjs    pont overlay <-> processus principal
-src/client/overlay.html   ce qui s'affiche, autonome
-src/client/config.html    fenetre de reglage de l'adresse du serveur
-
-test/                     tests unitaires (npm test)
+```bash
+npm start      # le client, depuis les sources
+npm test       # les tests, sans Discord ni réseau
 ```
 
-Les tests couvrent ce qui casse en silence : le rythme de la file (pause,
-reprise, rattrapage d'un arrivant en cours de route), la lecture de la durée
-d'une vidéo, et la normalisation de l'adresse du serveur. Ils tournent sans
-Discord ni réseau — `npm test`, une seconde.
+```
+src/server.js                bot Discord + serveur WebSocket
+src/file-memes.js            la file d'attente
+src/medias.js                reconnaissance des médias, durée réelle d'une vidéo
+src/deploy-commands.js       enregistrement des commandes slash
 
-## Ça ne marche pas
+src/client/main.js           assemblage : overlay, connexion, menu de l'icône
+src/client/ecrans.js         choix de l'écran et bascule automatique
+src/client/activite.js       jeu ou film sur l'écran principal ?
+src/client/sonde-activite.js le PowerShell qui décrit l'écran toutes les 2 s
+src/client/indicateur.js     la pastille « Livechat en cours »
+src/client/coins.js          position de la pastille
+src/client/audio.js          sortie audio
+src/client/maj.js            mises à jour automatiques
+src/client/reglages.js       .env et choix du menu
+src/client/url-serveur.js    nettoyage de l'adresse collée
+src/client/overlay.html      ce qui s'affiche
+src/client/config.html       fenêtre de l'adresse du serveur
+```
 
-**Rien n'apparaît quand je poste dans le salon** — l'intent MESSAGE CONTENT
-n'est pas activé (voir 2.2), ou le salon ne s'appelle pas exactement
-`livechat`, ou le bot n'y a pas accès.
+Les tests couvrent ce qui casse en silence : le rythme de la file, la durée des
+vidéos, l'adresse du serveur, la détection des jeux et des films, et la position
+de l'indicateur.
 
-**`/meme` n'existe pas dans Discord** — `npm run deploy` n'a pas été lancé, ou
-`DISCORD_GUILD_ID` est vide et la commande globale n'est pas encore propagée.
+---
 
-**Le bot répond mais rien ne s'affiche chez un pote** — son client n'est pas
-connecté au serveur. L'icône dans sa barre des tâches indique l'état
-(« Connecté » / « Déconnecté... ») ; « Configurer le serveur » pour vérifier
-l'adresse.
+## Dépannage
 
-**Ça marchait, et plus rien depuis que j'ai relancé le tunnel** — l'adresse a
-changé (normal, sur le plan gratuit). Renvoie la nouvelle dans Discord, chacun
-la recolle dans « Configurer le serveur ».
+**Rien n'apparaît quand je poste dans `#livechat`.** L'intent MESSAGE CONTENT
+n'est pas activé, le salon ne s'appelle pas exactement `livechat`, ou le bot n'y
+a pas accès.
 
-**`LiveChat tourne déjà`** — une instance du client tourne déjà sur cette
-machine. Son icône est dans la barre des tâches ; quitte-la depuis là avant
-d'en relancer une.
+**`/meme` n'existe pas, ou apparaît en double.** Absente : lance
+`npm run deploy`, et patiente jusqu'à une heure si `DISCORD_GUILD_ID` est vide.
+En double : les commandes ont été enregistrées une fois avec
+`DISCORD_GUILD_ID` et une fois sans. Supprime l'un des deux jeux.
 
-**Aucune adresse postée dans Discord au démarrage du serveur** — regarde la
-console : `[tunnel] cloudflared introuvable` veut dire qu'il faut l'installer
-(`winget install --id Cloudflare.cloudflared`). `AUTO_TUNNEL=none` dans `.env`
-désactive volontairement l'automatique. Si le tunnel a démarré mais que rien
-n'est posté, vérifie que `#livechat` (ou `ANNOUNCE_CHANNEL`) existe bien et
-que le bot y a accès.
+**Le bot répond, mais rien ne s'affiche chez quelqu'un.** Son appli n'est pas
+connectée : la première ligne du menu de l'icône indique « Connecte » ou
+« Deconnecte… ». Avec le tunnel gratuit, l'adresse change à chaque lancement du
+serveur : il faut recoller la nouvelle dans **Configurer le serveur…**.
 
-**`/meme lien:` refuse mon lien de GIF** — l'option `lien` veut une URL qui finit
-par `.jpg`, `.png`, `.gif`, `.webp`, `.mp4` ou `.webm`. Un lien du sélecteur GIF
-n'en est pas un : poste-le directement dans `#livechat`.
+**L'appli installée se connecte à `localhost` au lieu du serveur.** Elle a été
+lancée depuis le dossier du projet, dont le `.env` impose son `SERVER_URL`.
+Lance-la depuis le menu Démarrer.
 
-**Un GIF s'affiche en texte** — le délai d'attente de l'embed a expiré avant que
-Discord réponde. Monte `EMBED_WAIT_MS` côté serveur si la connexion traîne.
+**Aucune adresse postée au démarrage du serveur.** `[tunnel] cloudflared
+introuvable` dans la console : installe-le. Sinon, vérifie que
+`AUTO_TUNNEL` n'est pas sur `none` et que le bot a accès au salon d'annonce.
 
-**Aucun son du tout** — vérifie « Sortie audio » dans le menu de l'icône, et que
-« Couper le son » n'est pas actif.
+**`/meme lien:` refuse mon GIF.** L'option `lien` veut une URL qui finit par
+`.jpg`, `.png`, `.gif`, `.webp`, `.mp4` ou `.webm`. Poste plutôt le GIF
+directement dans `#livechat`.
 
-**Les memes n'apparaissent jamais alors que je suis en plein écran** — la
-bascule automatique doit t'envoyer sur l'autre écran, mais il en faut un second
-de branché, le jeu doit être sur l'écran **principal**, et `OVERLAY_AUTO_SWITCH`
-ne doit pas être sur `off`. Si ce jeu-là n'est pas reconnu, ajoute son exe à
-`OVERLAY_GAMES`. Sans second
-écran, il n'y a nulle part où basculer — reste en plein écran fenêtré pour ce
-jeu-là.
+**Un GIF s'affiche en texte.** Discord a mis trop de temps à résoudre le lien :
+augmente `EMBED_WAIT_MS`.
 
-**L'overlay saute d'un écran à l'autre sans arrêt** — c'était un vrai bug,
-corrigé : la détection lisait la mauvaise valeur de l'API Windows et se croyait
-en plein écran en permanence, si bien qu'elle suivait la fenêtre active au lieu
-du jeu. Si tu vois encore ce comportement, tu es sur une version antérieure à
-la 2.3.0 — mets à jour.
+**Aucun son.** Vérifie **Sortie audio** et **Couper le son** dans le menu.
 
-**L'appli ne se met jamais à jour** — la mise à jour automatique ne marche que
-sur une version installée (l'ancien `.exe` portable n'a pas ce mécanisme,
-voir « Distribution par GitHub Releases » plus haut). Vérifie aussi que la
-dernière release GitHub contient bien les trois fichiers (`Setup.exe`,
-`.yml`, `.blockmap`), et que `OVERLAY_AUTO_UPDATE` n'est pas sur `off`.
+**Les memes ne s'affichent pas pendant un jeu.** Un jeu en **plein écran
+exclusif** empêche toute fenêtre de se dessiner par-dessus : c'est une limite de
+Windows. La bascule automatique contourne le problème, à condition d'avoir un
+second écran, que le jeu soit sur l'écran **principal** et qu'il soit reconnu
+(sinon, ajoute son exe à `OVERLAY_GAMES`). Sans second écran, passe le jeu en
+plein écran fenêtré.
 
-**« Démarrer avec Windows » est grisée** — cette option n'a de sens que sur
-une version installée ; en développement (`npm start`), il n'y a pas de
-chemin stable vers quoi pointer.
+**« LiveChat tourne déjà ».** Une instance est déjà ouverte : quitte-la depuis
+son icône avant d'en relancer une.
+
+**L'appli ne se met jamais à jour.** Vérifie que la dernière release contient
+les trois fichiers, et que `OVERLAY_AUTO_UPDATE` n'est pas sur `off`. Une
+installation antérieure à la 2.0.0 (portable, ou nommée « Le mur ») ne peut pas
+se mettre à jour seule : réinstalle-la une fois avec l'installeur actuel.
+
+**« Démarrer avec Windows » est grisé.** L'option n'existe que sur l'appli
+installée, pas avec `npm start`.
