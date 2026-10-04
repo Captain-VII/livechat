@@ -471,6 +471,19 @@ sous-menu **Afficher sur** fait pareil, en cours de soirée (la décocher pendan
 une bascule ramène l'overlay tout de suite). N'a d'effet qu'avec au moins deux
 écrans branchés — sans second écran, il n'y a nulle part où basculer.
 
+### Indicateur « livechat en cours » sur l'autre écran
+
+Pendant qu'un meme s'affiche, une petite pastille discrète apparaît sur
+**l'autre écran** que celui de l'overlay : « Livechat en cours · pseudo ». C'est
+surtout utile quand la bascule automatique a envoyé les memes à côté pendant un
+film ou une partie — sans elle, on ne sait pas qu'il faut tourner la tête.
+
+Elle est traversée par les clics et ne prend jamais le focus. Elle disparaît
+avec le meme. Le sous-menu **Indicateur sur l'autre écran** de l'icône permet
+de la désactiver et de choisir son coin (en haut à gauche par défaut) ; les
+deux choix sont retenus d'un lancement à l'autre. N'apparaît qu'avec au moins
+deux écrans.
+
 ## Choisir la sortie audio (par client)
 
 Même logique pour le son : `OVERLAY_AUDIO_DEVICE` prend un bout du nom du
@@ -552,6 +565,8 @@ src/client/main.js        assemblage : fenetre overlay, connexion, menu
 src/client/ecrans.js      choix de l'ecran + bascule auto
 src/client/activite.js    jeu ou film sur l'ecran principal ? (logique pure, testee)
 src/client/sonde-activite.js  le PowerShell qui decrit l'ecran toutes les 2 s
+src/client/indicateur.js  pastille "livechat en cours" sur l'autre ecran
+src/client/coins.js       position de la pastille selon le coin choisi (teste)
 src/client/audio.js       choix de la sortie audio
 src/client/maj.js         mise a jour automatique
 src/client/reglages.js    .env + reglages du menu, conserves entre deux lancements

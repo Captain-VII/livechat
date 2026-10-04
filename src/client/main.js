@@ -18,6 +18,7 @@ import {
 
 import { creerAudio } from './audio.js';
 import { creerEcrans } from './ecrans.js';
+import { creerIndicateur } from './indicateur.js';
 import { demarrerVerificationMaj, verificationEnCours, verifierMajMaintenant } from './maj.js';
 import { ecrireConfig, lireConfig, reglage, reglageActif } from './reglages.js';
 import { demarrerSondeActivite } from './sonde-activite.js';
@@ -70,10 +71,21 @@ const getFenetre = () => fenetre;
 
 const ecrans = creerEcrans({
   getFenetre,
-  surChangement: () => majMenu(),
+  // L'overlay a change d'ecran : l'indicateur passe sur un autre.
+  surChangement: () => {
+    majMenu();
+    indicateur.rafraichir();
+  },
   ecranVouluEnv: ECRAN_VOULU,
   basculeAutoParDefaut: BASCULE_AUTO_ACTIVE,
   jeuxEnv: JEUX_PERSO,
+});
+
+// La pastille "livechat en cours" sur l'ecran qui n'affiche pas l'overlay.
+const indicateur = creerIndicateur({
+  dossier: __dirname,
+  getAutreEcran: () => ecrans.ecrans().find((e) => e.id !== ecrans.ecranChoisiId()) ?? null,
+  surChangement: () => majMenu(),
 });
 
 /** @type {ReturnType<typeof demarrerSondeActivite>|null} */
@@ -271,9 +283,11 @@ function afficher(meme) {
   // sortirait un jeu de son plein ecran.
   if (!fenetre.isVisible()) fenetre.showInactive();
   fenetre.webContents.send('meme', feuille);
+  indicateur.montrer(meme);
 }
 
 function cacher() {
+  indicateur.cacher();
   if (!fenetre || fenetre.isDestroyed() || !fenetre.isVisible()) return;
   fenetre.webContents.send('retrait');
   fenetre.hide();
@@ -467,6 +481,7 @@ function majMenu() {
       { label: sonCoupe ? 'Retablir le son' : 'Couper le son', click: basculerSon },
       { label: 'Sortie audio', submenu: menuSortieAudio() },
       { label: 'Afficher sur', submenu: menuEcrans() },
+      { label: "Indicateur sur l'autre ecran", submenu: indicateur.menu() },
       {
         label: 'Demarrer avec Windows',
         type: 'checkbox',

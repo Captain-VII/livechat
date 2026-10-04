@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+  <title>LiveChat - en cours</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      user-select: none;
+    }
+
+    /* Colle la pastille au coin choisi : a droite pour les coins de droite, etc. */
+    body {
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+    }
+    body.droite { justify-content: flex-end; }
+    body.bas { align-items: flex-end; }
+
+    .pastille {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(20, 20, 24, 0.72);
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 13px;
+      line-height: 1.2;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 200ms ease;
+    }
+    .pastille.visible { opacity: 1; }
+
+    .point {
+      flex: none;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #e4572e;
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+
+    .texte {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .auteur { opacity: 0.65; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+  </style>
+</head>
+<body>
+  <div class="pastille" id="pastille">
+    <span class="point"></span>
+    <span class="texte">Livechat en cours<span class="auteur" id="auteur"></span></span>
+  </div>
+
+  <script>
+    // Appelee par le processus principal (webContents.executeJavaScript).
+    window.afficherIndicateur = (auteur, coin) => {
+      const [vertical, horizontal] = String(coin).split('-');
+      document.body.className = `${vertical} ${horizontal}`;
+      document.getElementById('auteur').textContent = auteur ? ` · ${auteur}` : '';
+      document.getElementById('pastille').classList.add('visible');
+    };
+  </script>
+</body>
+</html>
