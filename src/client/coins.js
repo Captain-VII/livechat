@@ -3,10 +3,10 @@
 // --------------------------------------------------------------------------
 
 export const COINS = {
-  'haut-gauche': 'En haut a gauche',
-  'haut-droite': 'En haut a droite',
-  'bas-gauche': 'En bas a gauche',
-  'bas-droite': 'En bas a droite',
+  'haut-gauche': 'En haut à gauche',
+  'haut-droite': 'En haut à droite',
+  'bas-gauche': 'En bas à gauche',
+  'bas-droite': 'En bas à droite',
 };
 
 export const COIN_PAR_DEFAUT = 'haut-gauche';

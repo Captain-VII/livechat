@@ -144,7 +144,7 @@ function surConnexionPerdue() {
     minuteurAlerte = null;
     if (estConnecte()) return;
     alerteCoupureEnvoyee = true;
-    notifier('Connexion au serveur perdue. Nouvelles tentatives en cours...');
+    notifier('Connexion au serveur perdue. Nouvelles tentatives en cours…');
   }, DELAI_AVANT_ALERTE_MS);
 }
 
@@ -155,7 +155,7 @@ function surConnexionRetablie() {
   // connexion au lancement declencherait une notification pour rien.
   if (alerteCoupureEnvoyee) {
     const duree = coupureDepuis ? Math.round((Date.now() - coupureDepuis) / 1000) : 0;
-    notifier(`Connexion retablie${duree ? ` apres ${duree} s` : ''}.`);
+    notifier(`Connexion rétablie${duree ? ` après ${duree} s` : ''}.`);
   }
   alerteCoupureEnvoyee = false;
   coupureDepuis = 0;
@@ -419,11 +419,11 @@ function creerFenetre() {
 
 function menuSortieAudio() {
   const sorties = audio.sortiesUtiles();
-  if (sorties.length === 0) return [{ label: 'Detection en cours...', enabled: false }];
+  if (sorties.length === 0) return [{ label: 'Détection en cours…', enabled: false }];
 
   return [
     {
-      label: 'Sortie par defaut de Windows',
+      label: 'Sortie par défaut de Windows',
       type: 'radio',
       checked: audio.sortieChoisieId() === null,
       click: () => audio.routerVers(null, { manuel: true }),
@@ -453,7 +453,7 @@ function menuEcrans() {
     })),
     { type: 'separator' },
     {
-      label: "Basculer seul quand on joue ou regarde un film sur l'ecran principal",
+      label: "Basculer seul quand on joue ou regarde un film sur l'écran principal",
       type: 'checkbox',
       checked: ecrans.basculeAutoActive(),
       click: () => ecrans.basculerBasculeAuto(),
@@ -464,7 +464,7 @@ function menuEcrans() {
 function majMenu() {
   if (!tray) return;
 
-  const etatConnexion = estConnecte() ? 'Connecte' : 'Deconnecte...';
+  const etatConnexion = estConnecte() ? 'Connecté' : 'Déconnecté…';
 
   tray.setContextMenu(
     Menu.buildFromTemplate([
@@ -477,13 +477,13 @@ function majMenu() {
       },
       { label: 'Tester un meme', click: testerMeme },
       { type: 'separator' },
-      { label: 'Configurer le serveur...', click: ouvrirConfig },
+      { label: 'Configurer le serveur…', click: ouvrirConfig },
       { label: sonCoupe ? 'Retablir le son' : 'Couper le son', click: basculerSon },
       { label: 'Sortie audio', submenu: menuSortieAudio() },
       { label: 'Afficher sur', submenu: menuEcrans() },
-      { label: "Indicateur sur l'autre ecran", submenu: indicateur.menu() },
+      { label: "Indicateur sur l'autre écran", submenu: indicateur.menu() },
       {
-        label: 'Demarrer avec Windows',
+        label: 'Démarrer avec Windows',
         type: 'checkbox',
         checked: demarreAvecWindows(),
         enabled: app.isPackaged,
@@ -492,7 +492,7 @@ function majMenu() {
       { type: 'separator' },
       { label: `Version ${app.getVersion()}`, enabled: false },
       {
-        label: verificationEnCours() ? 'Verification en cours...' : 'Verifier les mises a jour...',
+        label: verificationEnCours() ? 'Vérification en cours…' : 'Vérifier les mises à jour…',
         enabled: app.isPackaged && !verificationEnCours(),
         click: () => verifierMajMaintenant({ surChangement: majMenu }),
       },

@@ -51,7 +51,7 @@ export function creerEcrans({ getFenetre, surChangement, ecranVouluEnv, basculeA
 
   function decrire(ecran, index) {
     const principal = ecran.id === screen.getPrimaryDisplay().id ? ' (principal)' : '';
-    const nom = ecran.label || `ecran ${index + 1}`;
+    const nom = ecran.label || `écran ${index + 1}`;
     return `${index + 1}. ${nom} - ${ecran.bounds.width}x${ecran.bounds.height}${principal}`;
   }
 

@@ -150,7 +150,7 @@ async function actualiserMessageControle() {
     return;
   }
 
-  const contenu = `**${actuel.meme.author.name}** est a l'ecran.`;
+  const contenu = `**${actuel.meme.author.name}** est à l'écran.`;
   const composants = [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -418,7 +418,7 @@ async function annoncerSiPret() {
     try {
       const message = await salon.send(
         "**LiveChat est en ligne.** Colle cette adresse dans l'appli " +
-          "(icone de la barre des taches > *Configurer le serveur*) :\n" +
+          "(icône de la barre des tâches > *Configurer le serveur*) :\n" +
           `\`\`\`\n${urlPublique}\n\`\`\``,
       );
       etat[salon.id] = message.id;
@@ -488,7 +488,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.customId.startsWith('passer:')) return;
     const idCible = Number(interaction.customId.slice('passer:'.length));
     if (file.memeEnCours()?.meme.id !== idCible) {
-      await interaction.reply({ content: 'Deja passe.', flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: 'Déjà passé.', flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.deferUpdate(); // actualiserMessageControle() fera l'edition
@@ -503,13 +503,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const liste = [...wss.clients]
       .filter((s) => s.readyState === s.OPEN)
       .sort((a, b) => a.connecteDepuis - b.connecteDepuis)
-      .map((s) => `• **${s.pseudo}** — connecte depuis ${dureeLisible(maintenant - s.connecteDepuis)}`);
+      .map((s) => `• **${s.pseudo}** — connecté depuis ${dureeLisible(maintenant - s.connecteDepuis)}`);
 
     await interaction.reply({
       content:
         liste.length === 0
           ? "Personne n'a l'overlay ouvert en ce moment."
-          : `**${liste.length} overlay(s) connecte(s) :**\n${liste.join('\n')}`,
+          : `**${liste.length} overlay(s) connecté(s) :**\n${liste.join('\n')}`,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -518,7 +518,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.commandName === 'passer') {
     const yAvaitQuelqueChose = file.passer();
     await interaction.reply({
-      content: yAvaitQuelqueChose ? 'Meme passe.' : "Rien n'etait a l'ecran.",
+      content: yAvaitQuelqueChose ? 'Meme passé.' : "Rien n'était à l'écran.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -530,7 +530,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const lignes = [];
     if (enPause) lignes.push('_(diffusion en pause)_');
     lignes.push(
-      aLEcran ? `**A l'ecran :** ${aLEcran.author.name}` : "**A l'ecran :** rien pour le moment.",
+      aLEcran ? `**À l'écran :** ${aLEcran.author.name}` : "**À l'écran :** rien pour le moment.",
     );
 
     if (attente.length === 0) {
@@ -552,7 +552,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.commandName === 'vider') {
     if (!peutModerer(interaction)) {
       await interaction.reply({
-        content: 'Il faut le droit de gerer les messages pour vider la file.',
+        content: 'Il faut le droit de gérer les messages pour vider la file.',
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -562,8 +562,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await interaction.reply({
       content:
         combien === 0
-          ? "La file etait deja vide (le meme a l'ecran, lui, va au bout : /passer pour le couper)."
-          : `${combien} meme(s) en attente supprime(s).`,
+          ? "La file était déjà vide (le meme à l'écran, lui, va au bout : /passer pour le couper)."
+          : `${combien} meme(s) en attente supprimé(s).`,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -572,7 +572,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.commandName === 'bannir' || interaction.commandName === 'debannir') {
     if (!peutModerer(interaction)) {
       await interaction.reply({
-        content: 'Il faut le droit de gerer les messages pour ca.',
+        content: 'Il faut le droit de gérer les messages pour ça.',
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -583,7 +583,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (bannir && cible.id === interaction.user.id) {
       await interaction.reply({
-        content: 'Te bannir toi-meme, vraiment ?',
+        content: 'Te bannir toi-même, vraiment ?',
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -609,7 +609,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (bannis.has(interaction.user.id)) {
     await interaction.reply({
-      content: "Tu n'as plus acces a LiveChat.",
+      content: "Tu n'as plus accès à LiveChat.",
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -634,8 +634,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await interaction.reply({
       content:
         'Ce lien ne pointe pas directement sur un fichier (jpg, png, gif, webp, mp4, webm).\n' +
-        `Pour un GIF du selecteur Discord, poste-le directement dans #${WALL_CHANNEL} : ` +
-        'la, Discord resout le lien tout seul.',
+        `Pour un GIF du sélecteur Discord, poste-le directement dans #${WALL_CHANNEL} : ` +
+        'là, Discord résout le lien tout seul.',
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -649,7 +649,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   });
 
   await interaction.reply({
-    content: devant === 0 ? "A l'ecran." : `Dans la file, ${devant} devant toi.`,
+    content: devant === 0 ? "À l'écran." : `Dans la file, ${devant} devant toi.`,
     flags: MessageFlags.Ephemeral,
   });
 });

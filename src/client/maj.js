@@ -44,14 +44,14 @@ export function demarrerVerificationMaj({ actif, surChangement }) {
     verificationManuelleEnCours = false;
     surChangement();
     console.log('[maj] Deja a jour.');
-    notifier(`Deja a jour (version ${app.getVersion()}).`);
+    notifier(`Déjà à jour (version ${app.getVersion()}).`);
   });
 
   autoUpdater.on('update-downloaded', (info) => {
     verificationManuelleEnCours = false;
     surChangement();
     console.log(`[maj] Mise a jour ${info.version} prete. Redemarrage dans 15 s.`);
-    notifier(`Mise a jour ${info.version} installee. Redemarrage dans 15 secondes...`);
+    notifier(`Mise à jour ${info.version} installée. Redémarrage dans 15 secondes…`);
 
     // Un delai plutot qu'un redemarrage immediat : le temps que la
     // notification s'affiche, et de ne pas couper un meme en plein milieu.
@@ -63,7 +63,7 @@ export function demarrerVerificationMaj({ actif, surChangement }) {
     if (!verificationManuelleEnCours) return;
     verificationManuelleEnCours = false;
     surChangement();
-    notifier(`Verification impossible : ${erreur.message}`);
+    notifier(`Vérification impossible : ${erreur.message}`);
   });
 
   const verifier = () => autoUpdater.checkForUpdates().catch(() => {});
