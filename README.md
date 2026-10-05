@@ -339,12 +339,13 @@ a pas accès.
 **`/meme` n'existe pas, ou apparaît en double.** Absente : lance
 `npm run deploy`, et patiente jusqu'à une heure si `DISCORD_GUILD_ID` est vide.
 En double : les commandes ont été enregistrées une fois avec
-`DISCORD_GUILD_ID` et une fois sans. Supprime l'un des deux jeux.
+`DISCORD_GUILD_ID` et une fois sans. Supprime l'un des deux enregistrements.
 
 **Le bot répond, mais rien ne s'affiche chez quelqu'un.** Son appli n'est pas
-connectée : la première ligne du menu de l'icône indique « Connecte » ou
-« Deconnecte… ». Avec le tunnel gratuit, l'adresse change à chaque lancement du
-serveur : il faut recoller la nouvelle dans **Configurer le serveur…**.
+connectée : la première ligne du menu de l'icône indique `LiveChat — Connecte`
+ou `LiveChat — Deconnecte...`. Avec le tunnel gratuit, l'adresse change à
+chaque lancement du serveur : il faut recoller la nouvelle dans
+**Configurer le serveur…**.
 
 **L'appli installée se connecte à `localhost` au lieu du serveur.** Elle a été
 lancée depuis le dossier du projet, dont le `.env` impose son `SERVER_URL`.
