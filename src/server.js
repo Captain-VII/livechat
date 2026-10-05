@@ -19,6 +19,7 @@ import {
 
 import { creerFile } from './file-memes.js';
 import { dureeVideoMs, findMediaUrl, mediaDesEmbeds, mediaTypeOf, urlsDe } from './medias.js';
+import { estSalon } from './salons.js';
 
 const WALL_CHANNEL = 'livechat';
 
@@ -172,7 +173,7 @@ async function actualiserMessageControle() {
 
   const salon = client.channels.cache.find(
     (c) =>
-      c.name === WALL_CHANNEL &&
+      estSalon(c, WALL_CHANNEL) &&
       typeof c.send === 'function' &&
       (!process.env.DISCORD_GUILD_ID || c.guild?.id === process.env.DISCORD_GUILD_ID),
   );
@@ -390,7 +391,7 @@ async function annoncerSiPret() {
 
   const salons = client.channels.cache.filter(
     (c) =>
-      c.name === SALON_ANNONCE &&
+      estSalon(c, SALON_ANNONCE) &&
       typeof c.send === 'function' &&
       (!process.env.DISCORD_GUILD_ID || c.guild?.id === process.env.DISCORD_GUILD_ID),
   );
@@ -732,7 +733,7 @@ function patienter(message, author, text) {
 
 client.on(Events.MessageCreate, (message) => {
   if (message.author.bot) return; // sinon, boucle
-  if (message.channel?.name !== WALL_CHANNEL) return;
+  if (!estSalon(message.channel, WALL_CHANNEL)) return; // "📡┃livechat" compte aussi
   if (bannis.has(message.author.id)) return; // banni de LiveChat : le message reste dans Discord, mais ne passe pas a l'ecran
   traiterMessage(message);
 });

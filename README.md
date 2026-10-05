@@ -181,7 +181,8 @@ client. Sur une machine qui ne fait tourner que le serveur :
    marche), et le serveur peut refuser de démarrer avec `Used disallowed intents`.
 4. Lance `npm run server` une fois : la console affiche le lien d'invitation du
    bot. Ouvre-le et choisis ton serveur Discord.
-5. Crée un salon texte nommé exactement **`livechat`**.
+5. Crée un salon texte nommé **`livechat`**. Un emoji ou un séparateur devant
+   le nom est accepté (`📡┃livechat`).
 6. Enregistre les commandes slash :
 
    ```bash
@@ -333,7 +334,7 @@ de l'indicateur.
 ## Dépannage
 
 **Rien n'apparaît quand je poste dans `#livechat`.** L'intent MESSAGE CONTENT
-n'est pas activé, le salon ne s'appelle pas exactement `livechat`, ou le bot n'y
+n'est pas activé, le salon ne s'appelle pas `livechat`, ou le bot n'y
 a pas accès.
 
 **`/meme` n'existe pas, ou apparaît en double.** Absente : lance
