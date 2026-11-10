@@ -1,5 +1,7 @@
 import 'dotenv/config';
-import { PermissionFlagsBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { REST, Routes } from 'discord.js';
+
+import { COMMANDES } from './commandes.js';
 
 const { DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID } = process.env;
 
@@ -8,61 +10,13 @@ if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) {
   process.exit(1);
 }
 
-const meme = new SlashCommandBuilder()
-  .setName('meme')
-  .setDescription('Envoie un meme sur LiveChat')
-  .addAttachmentOption((option) =>
-    option.setName('fichier').setDescription('Une image ou une vidéo à envoyer sur LiveChat'),
-  )
-  .addStringOption((option) =>
-    option.setName('texte').setDescription('Une légende, ou juste du texte'),
-  )
-  .addStringOption((option) =>
-    option.setName('lien').setDescription('URL directe vers une image ou une vidéo'),
-  );
-
-const passer = new SlashCommandBuilder()
-  .setName('passer')
-  .setDescription('Passe le meme actuellement affiché sur LiveChat');
-
-const connectes = new SlashCommandBuilder()
-  .setName('connectes')
-  .setDescription('Liste qui a son overlay LiveChat ouvert en ce moment');
-
-const fileAttente = new SlashCommandBuilder()
-  .setName('file')
-  .setDescription('Montre le meme à l\'écran et ceux qui attendent leur tour');
-
-// Les commandes de moderation sont masquees par defaut pour qui n'a pas le
-// droit de gerer les messages ; le serveur revalide de son cote.
-const vider = new SlashCommandBuilder()
-  .setName('vider')
-  .setDescription('Vide la file d\'attente (le meme à l\'écran va au bout)')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages);
-
-const bannir = new SlashCommandBuilder()
-  .setName('bannir')
-  .setDescription('Empêche quelqu\'un d\'envoyer des memes sur LiveChat')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-  .addUserOption((option) =>
-    option.setName('membre').setDescription('La personne à priver de LiveChat').setRequired(true),
-  );
-
-const debannir = new SlashCommandBuilder()
-  .setName('debannir')
-  .setDescription('Redonne accès à LiveChat')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-  .addUserOption((option) =>
-    option.setName('membre').setDescription('La personne à réautoriser').setRequired(true),
-  );
-
 const rest = new REST().setToken(DISCORD_TOKEN);
 
 const route = DISCORD_GUILD_ID
   ? Routes.applicationGuildCommands(DISCORD_CLIENT_ID, DISCORD_GUILD_ID)
   : Routes.applicationCommands(DISCORD_CLIENT_ID);
 
-const commandes = [meme, passer, connectes, fileAttente, vider, bannir, debannir];
+const commandes = COMMANDES.map((c) => c.definition);
 
 try {
   await rest.put(route, { body: commandes.map((c) => c.toJSON()) });
