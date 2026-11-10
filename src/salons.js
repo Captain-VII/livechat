@@ -15,3 +15,14 @@ export function nomSansDecor(nom) {
 export function estSalon(salon, nom) {
   return nomSansDecor(salon?.name) === nomSansDecor(nom);
 }
+
+/**
+ * Les salons ou le bot peut ecrire sous ce nom, limites a DISCORD_GUILD_ID
+ * quand il est rempli.
+ * @param {Iterable<object>} salons Typiquement client.channels.cache.values().
+ */
+export function salonsNommes(salons, nom, guildId) {
+  return [...salons].filter(
+    (c) => estSalon(c, nom) && typeof c.send === 'function' && (!guildId || c.guild?.id === guildId),
+  );
+}

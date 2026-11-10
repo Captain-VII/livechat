@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { estSalon, nomSansDecor } from '../src/salons.js';
+import { estSalon, nomSansDecor, salonsNommes } from '../src/salons.js';
 
 describe('estSalon', () => {
   it('reconnait le salon tel quel', () => {
@@ -22,5 +22,23 @@ describe('estSalon', () => {
 
   it('garde les accents du nom', () => {
     assert.equal(nomSansDecor('📜┃règlement'), 'règlement');
+  });
+});
+
+describe('salonsNommes', () => {
+  const envoyer = () => {};
+  const salons = [
+    { name: '📡┃livechat', send: envoyer, guild: { id: 'a' } },
+    { name: 'livechat', send: envoyer, guild: { id: 'b' } },
+    { name: 'livechat', guild: { id: 'a' } }, // vocal ou categorie : pas de send
+    { name: 'discussion', send: envoyer, guild: { id: 'a' } },
+  ];
+
+  it('garde les salons du bon nom ou le bot peut ecrire', () => {
+    assert.deepEqual(salonsNommes(salons, 'livechat'), [salons[0], salons[1]]);
+  });
+
+  it('se limite au serveur demande', () => {
+    assert.deepEqual(salonsNommes(salons, 'livechat', 'b'), [salons[1]]);
   });
 });

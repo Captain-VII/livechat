@@ -306,9 +306,13 @@ npm test       # les tests, sans Discord ni réseau
 ```
 
 ```
-src/server.js                bot Discord + serveur WebSocket
+src/server.js                assemblage : bot Discord, serveur WebSocket, bouton Passer
+src/commandes.js             commandes slash : définition et effet, côte à côte
+src/messages.js              d'un message Discord à des memes (pièces jointes, liens, GIF)
+src/tunnel.js                tunnel Cloudflare et annonce de l'adresse dans Discord
 src/file-memes.js            la file d'attente
 src/medias.js                reconnaissance des médias, durée réelle d'une vidéo
+src/salons.js                reconnaître le salon livechat, emoji compris
 src/deploy-commands.js       enregistrement des commandes slash
 
 src/client/main.js           assemblage : overlay, connexion, menu de l'icône
@@ -326,8 +330,8 @@ src/client/config.html       fenêtre de l'adresse du serveur
 ```
 
 Les tests couvrent ce qui casse en silence : le rythme de la file, la durée des
-vidéos, l'adresse du serveur, la détection des jeux et des films, et la position
-de l'indicateur.
+vidéos, la lecture des messages Discord, les commandes slash, l'adresse du
+serveur, la détection des jeux et des films, et la position de l'indicateur.
 
 ---
 
