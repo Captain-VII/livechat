@@ -168,7 +168,12 @@ const serveurHttp = http.createServer((_req, res) => {
   res.end(JSON.stringify({ ok: true, overlays: wss?.clients.size ?? 0 }));
 });
 
-const wss = new WebSocketServer({ server: serveurHttp });
+// Un client n'envoie que { type: 'passer' } : 1 Ko suffit (ws accepte 100 Mo par defaut).
+const wss = new WebSocketServer({ server: serveurHttp, maxPayload: 1024 });
+
+// Le serveur est public : une adresse IP ne peut demander « passer » qu'une fois toutes les 2 s.
+const ATTENTE_PASSER = 2000;
+const dernierPasser = new Map();
 
 function diffuser(message) {
   const donnees = JSON.stringify(message);
@@ -181,7 +186,8 @@ function diffuser(message) {
 function pseudoDepuisUrl(url) {
   try {
     const brut = new URL(url, 'http://x').searchParams.get('pseudo');
-    const propre = (brut ?? '').trim().slice(0, 32);
+    // Sans caracteres de controle (journaux) ni mise en forme Discord (affiche par /connectes).
+    const propre = (brut ?? '').replace(/[\p{Cc}*_~`|<>@\\]/gu, '').trim().slice(0, 32);
     return propre || 'anonyme';
   } catch {
     return 'anonyme';
@@ -226,6 +232,9 @@ wss.on('connection', (socket, requete) => {
       return;
     }
     if (message?.type === 'passer') {
+      const maintenant = Date.now();
+      if (maintenant - (dernierPasser.get(adresse) ?? 0) < ATTENTE_PASSER) return;
+      dernierPasser.set(adresse, maintenant);
       console.log(`[livechat] Passer demande depuis l'overlay (${adresse}).`);
       file.passer();
     }
@@ -233,6 +242,8 @@ wss.on('connection', (socket, requete) => {
 });
 
 setInterval(() => {
+  const limite = Date.now() - ATTENTE_PASSER;
+  for (const [ip, quand] of dernierPasser) if (quand < limite) dernierPasser.delete(ip);
   for (const socket of wss.clients) {
     if (socket.estVivant === false) {
       socket.terminate();
